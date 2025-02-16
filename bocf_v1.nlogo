@@ -1,7 +1,7 @@
 to setup
   clear-all
   reset-ticks
-  import-pcolors "C:/Users/jthind3/NetLogo/map1.png"
+  import-pcolors "./Images/map1.png"
   ask patches [
     if pcolor > 88 [
       set pcolor 88
@@ -15,7 +15,6 @@ end
 to go
   tick
 end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 261
@@ -420,7 +419,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.1
+NetLogo 6.4.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
