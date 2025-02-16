@@ -1,13 +1,13 @@
 to setup
   clear-all
   reset-ticks
-  import-pcolors "./Images/m"
+  import-pcolors "./Images/map1.png"
   ask patches [
     if pcolor > 88 [
       set pcolor 88
     ]
     if pcolor < 88 [
-      set pcolor 66
+      set pcolor
     ]
   ]
 end
