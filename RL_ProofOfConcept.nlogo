@@ -21,6 +21,7 @@ globals [
 
   ;; Patches that define the "Chinese Farm" area
   chinese-farm-patches
+  chinese-farm-center
 ]
 
 breed [israeli-tanks israeli-tank]
@@ -29,6 +30,7 @@ breed [infantry soldier]
 
 patches-own [
   terrain-type
+  captured-by  ;; "israeli", "egyptian", or "none"
 ]
 turtles-own [
   state
@@ -84,8 +86,14 @@ to setup-terrain
   ask patches with [pxcor >= 5 and pxcor <= 30 and pycor >= 10 and pycor <= 40] [
     set terrain-type "chinese-farm"
     set pcolor green
+    set captured-by "none"  ;; Initialize to "none" for Chinese Farm patches
   ]
   set chinese-farm-patches patches with [terrain-type = "chinese-farm"]
+
+  ;; Define the center patch of the Chinese Farm
+  let center-x 17
+  let center-y 24
+  set chinese-farm-center patch center-x center-y
 end
 
 to setup-units
@@ -169,7 +177,6 @@ end
 ;; =========================================
 ;; MAIN LOOP
 ;; =========================================
-
 to go
   ask israeli-tanks [ q-learn-move-israeli ]
   ask egyptian-tanks [ q-learn-move-egyptian ]
@@ -178,6 +185,12 @@ to go
   ask infantry with [team = "egyptian"] [ q-learn-move-egyptian-infantry ]
 
   check-shooting
+  capture-chinese-farm  ;; Capture patches within the Chinese Farm
+
+  ;; Display counts every tick
+  ;show (word "Israeli Units: " count turtles with [team = "israeli"])
+  ;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
+
   tick
 end
 
@@ -201,13 +214,8 @@ to q-learn-move-israeli
   [
     execute-action a
 
-    ;; Ensure we are using a boolean check for has-crossed-canal
-    if has-crossed-canal = true and (pxcor < canal-x) [
-      setxy oldx oldy  ;; Prevent movement back across the canal
-    ]
-
     ;; Group cohesion logic
-    if distance my-group-center > 4 [
+    if distance my-group-center > 5 [
       setxy oldx oldy
     ]
   ]
@@ -306,7 +314,7 @@ to q-learn-move-egyptian-infantry
   execute-action a
 
   ;; For Egyptian infantry, group cohesion distance <= 6
-  if distance my-group-center > 6 [
+  if distance my-group-center > 5 [
     setxy oldx oldy
   ]
 
@@ -333,9 +341,9 @@ end
 
 to handle-canal-wait
   if (canal-wait < 0) [
-    ;; If we step onto the canal columns, start 10-tick wait
+    ;; If we step onto the canal columns, start a short wait
     if (pxcor = canal-x - 1 or pxcor = canal-x or pxcor = canal-x + 1) [
-      set canal-wait 10
+      set canal-wait 5  ;; Reduced wait time from 10 to 5 ticks
       set canal-timer 0  ;; Reset the timer when entering the canal
     ]
   ]
@@ -344,10 +352,11 @@ to handle-canal-wait
     set canal-timer canal-timer + 1
   ]
 
-  ;; Check if the agent has been on the canal for 5 seconds
+  ;; Check if the agent has been on the canal for the required time
   if canal-timer >= 5 [
     set canal-wait -1  ;; Force the turtle to stop waiting on the canal
     set canal-timer 0  ;; Reset the timer
+    set has-crossed-canal true  ;; Mark the unit as having crossed the canal
   ]
 end
 
@@ -427,34 +436,35 @@ to-report compute-reward [s s2]
   ;; Base movement cost
   let reward -1
 
-  ;; Penalize trying to cross back
-  ;;if has-crossed-canal and ((oldx < canal-x and newx >= canal-x) or (oldx >= canal-x and newx < canal-x)) [
-  ;;  set reward (reward - 500)  ;; Penalize crossing back
+  ;; Count friendly units alive
+  let friendly-units count turtles with [team = [team] of myself]
+
+  ;; Normalize unit count (Higher reward for more friendly units alive)
+  let unit-reward friendly-units * 50  ;; Each friendly unit adds +50 to the reward
+
+  ;; Reward for controlling Chinese Farm patches
+  let controlled-patches count chinese-farm-patches with [captured-by = [team] of myself]
+  let control-reward controlled-patches * 1000  ;; +1000 for each controlled patch
+
+  ;; Reward for crossing the canal
+  ;;if (oldx >= canal-x and newx < canal-x) or (oldx < canal-x and newx >= canal-x) [
+  ;;  set reward (reward + 500)  ;; Large reward for crossing the canal
   ;;]
 
-  ;; Other rewards or penalties for crossing the canal
-  ;;if (team = "israeli" and oldx >= (canal-x + 2)
-  ;;    and newx >= (canal-x - 1) and newx <= (canal-x + 1)) [
-  ;;  set reward (reward + 200)
+  ;; Penalty for staying on the wrong side
+  ;;if (team = "egyptian" and pxcor >= canal-x) or (team = "israeli" and pxcor < canal-x) [
+  ;;  set reward (reward - 1000)  ;; Penalty for being on the wrong side
   ;;]
 
-  ;;if (team = "israeli" and oldx >= (canal-x + 2) and newx <= (canal-x - 2)) [
-  ;;  set reward (reward + 700)
-  ;;]
+  ;; Reward based on proximity to the center of the Chinese Farm
+  let distance-to-center team-distance chinese-farm-center
+  let proximity-reward  -1000 + (distance-to-center * 10)  ;; +1000 at center, decreasing by 10 per unit distance
+  ;show (word "Distance to center: " distance-to-center ", Proximity reward: " proximity-reward)
 
-  ;; Reward based on proximity to the Chinese Farm
-
-  ask patches in-radius 10 [
-    if (terrain-type = "chinese-farm") [
-      set reward (reward + 500)  ;; Add a reward for being near a Chinese Farm patch
-    ]
-  ]
-
-  let farm-reward max list -100 (100 - 10 * distance-to-farmer) ;; Using max list instead
-  set reward (reward + farm-reward)
-
-  show reward
-  report reward
+  ;; Combine all rewards
+  let total-reward reward + unit-reward + control-reward + proximity-reward
+  ;show (word "Total reward: " total-reward)
+  report total-reward
 end
 
 to update-q-table-israeli [s a r s2]
@@ -492,6 +502,11 @@ to-report my-group-center
   report patch-here
 end
 
+to report-unit-counts
+  show (word "Israeli Units: " count turtles with [team = "israeli"])
+  show (word "Egyptian Units: " count turtles with [team = "egyptian"])
+end
+
 ;; =========================================
 ;; RANGED SHOOTING
 ;; =========================================
@@ -500,23 +515,86 @@ to check-shooting
   ;; 1) Infantry shoot enemy infantry in radius 3 (cannot shoot tanks)
   ask infantry [
     let targets infantry in-radius 3 with [team != [team] of myself]
-    ask targets [ die ]
+    ask targets [
+      die
+      ask chinese-farm-patches with [captured-by = [team] of myself] [
+        set captured-by "none"
+        set pcolor green  ;; Reset color to green (neutral)
+      ]
+    ]
   ]
 
   ;; 2) Tanks shoot any enemy (tanks or infantry) in radius 5
   ask israeli-tanks [
     let targets turtles in-radius 5 with [team = "egyptian"]
-    ask targets [ die ]
+    ask targets [
+      die
+      ask chinese-farm-patches with [captured-by = [team] of myself] [
+        set captured-by "none"
+        set pcolor green  ;; Reset color to green (neutral)
+      ]
+    ]
   ]
   ask egyptian-tanks [
     let targets turtles in-radius 5 with [team = "israeli"]
-    ask targets [ die ]
+    ask targets [
+      die
+      ask chinese-farm-patches with [captured-by = [team] of myself] [
+        set captured-by "none"
+        set pcolor green  ;; Reset color to green (neutral)
+      ]
+    ]
   ]
 end
 
 to reset-crossing-status
   ask turtles [
     set has-crossed-canal false
+  ]
+end
+
+to capture-chinese-farm
+  ask turtles [
+    if team = "israeli" [
+      ask patch-here [
+        if terrain-type = "chinese-farm" and captured-by != "israeli" [
+          set captured-by "israeli"
+          set pcolor blue  ;; Change color to blue for Israeli control
+        ]
+      ]
+    ]
+    if team = "egyptian" [
+      ask patch-here [
+        if terrain-type = "chinese-farm" and captured-by != "egyptian" [
+          set captured-by "egyptian"
+          set pcolor green  ;; Change color to green for Egyptian control
+        ]
+      ]
+    ]
+  ]
+end
+
+to-report distance-to-chinese-farm-center
+  report distance chinese-farm-center
+end
+
+to-report team-distance [target-patch]
+  ;; Check the team and position of the turtle
+  ifelse team = "egyptian" [
+    ;; Egyptians are on the west side, so only calculate distance if they are west of the canal
+    if pxcor < canal-x [
+      report distance target-patch
+    ]
+    ;; If Egyptians are on the east side, return a large distance (or handle as needed)
+    report 9999  ;; Arbitrary large value to indicate invalid distance
+  ]
+  [
+    ;; Israelis are on the east side, so only calculate distance if they are east of the canal
+    if pxcor >= canal-x [
+      report distance target-patch
+    ]
+    ;; If Israelis are on the west side, return a large distance (or handle as needed)
+    report 9999  ;; Arbitrary large value to indicate invalid distance
   ]
 end
 @#$#@#$#@
