@@ -91,7 +91,7 @@ to setup-terrain
   set chinese-farm-center patch center-x center-y
 
   ;; Add one horizontal road spanning the entire width of the map
-  ask patches with [pycor = 30] pxcor > 10] [  ;; Horizontal road at y = 50
+  ask patches with [pycor = 30 and pxcor > 20] [  ;; Horizontal road at y = 50
     set terrain-type "road"
     set pcolor gray
   ]
@@ -103,91 +103,6 @@ to setup-terrain
   ]
 end
 
-to setup-units
-  ;; Israeli Tanks: 5 groups of 5 each => 25 tanks
-  repeat 5 [
-    let cluster-x (25 + random 15)  ;; Random x within the Chinese Farm area
-    let cluster-y (5 + random 5)    ;; Start from the south (low y-values)
-
-    create-israeli-tanks 5 [
-      set group-id group-counter
-      set team "israeli"
-      set canal-wait -1
-      set shape "circle"
-      set color 135   ;; pink for Israeli tanks
-      setxy cluster-x cluster-y
-
-      set state (list xcor ycor)
-      set action ""
-    ]
-    set group-counter group-counter + 1
-  ]
-
-  ;; Egyptian Tanks: 5 groups of 5 each => 25 tanks
-  repeat 5 [
-    let cluster-x (21 + random 4)  ;; Random x on the left side of the Chinese Farm
-    let cluster-y (40 + random 20) ;; Random y within the Chinese Farm area
-
-    create-egyptian-tanks 5 [
-      set group-id group-counter
-      set team "egyptian"
-      set canal-wait -1
-      set shape "circle"
-      set color 25    ;; orange for Egyptian tanks
-      setxy cluster-x cluster-y
-
-      ;; Fortified positions: Stay in place initially
-      set state (list xcor ycor)
-      set action "hold-position"  ;; Default action for fortified troops
-
-      ;; Add a visual indicator for fortified positions (e.g., a black border)
-      set size 1.5  ;; Slightly larger to indicate fortification
-    ]
-    set group-counter group-counter + 1
-  ]
-
-  ;; Israeli Infantry: 5 groups of 5 each => 25 infantry
-  repeat 5 [
-    let cluster-x (25 + random 15)  ;; Random x within the Chinese Farm area
-    let cluster-y (5 + random 5)    ;; Start from the south (low y-values)
-
-    create-infantry 5 [
-      set group-id group-counter
-      set team "israeli"
-      set canal-wait -1
-      set shape "person"
-      set color 105   ;; blue for Israeli infantry
-      setxy cluster-x cluster-y
-
-      set state (list xcor ycor)
-      set action ""
-    ]
-    set group-counter group-counter + 1
-  ]
-
-  ;; Egyptian Infantry: 5 groups of 5 each => 25 infantry
-  repeat 5 [
-    let cluster-x (21 + random 4)  ;; Random x on the left side of the Chinese Farm
-    let cluster-y (40 + random 20) ;; Random y within the Chinese Farm area
-
-    create-infantry 5 [
-      set group-id group-counter
-      set team "egyptian"
-      set canal-wait -1
-      set shape "person"
-      set color 15    ;; red for Egyptian infantry
-      setxy cluster-x cluster-y
-
-      ;; Fortified positions: Stay in place initially
-      set state (list xcor ycor)
-      set action "hold-position"  ;; Default action for fortified troops
-
-      ;; Add a visual indicator for fortified positions (e.g., a black border)
-      set size 1.5  ;; Slightly larger to indicate fortification
-    ]
-    set group-counter group-counter + 1
-  ]
-end
 
 ;; =========================================
 ;; MAIN LOOP

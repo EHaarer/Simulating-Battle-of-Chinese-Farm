@@ -77,8 +77,8 @@ to setup-terrain
     set pcolor blue
   ]
 
-  ;; Define the Chinese Farm as a larger rectangle to the right of the blue line
-  ask patches with [pxcor > 20 and pxcor <= 40 and pycor >= 20 and pycor <= 60] [
+  ;; Define the Chinese Farm as a significantly larger rectangle to the right of the blue line
+  ask patches with [pxcor > 20 and pxcor <= 60 and pycor >= 20 and pycor <= 80] [
     set terrain-type "chinese-farm"
     set pcolor green
     set captured-by "none"  ;; Initialize to "none" for Chinese Farm patches
@@ -86,10 +86,23 @@ to setup-terrain
   set chinese-farm-patches patches with [terrain-type = "chinese-farm"]
 
   ;; Define the center patch of the Chinese Farm
-  let center-x 30  ;; Center x-coordinate of the Chinese Farm
-  let center-y 40  ;; Center y-coordinate of the Chinese Farm
+  let center-x 40  ;; Adjusted center x-coordinate
+  let center-y 50  ;; Adjusted center y-coordinate
   set chinese-farm-center patch center-x center-y
+
+  ;; Add one horizontal road spanning the entire width of the map
+  ask patches with [pycor = 30 and pxcor > 20] [  ;; Horizontal road at y = 50
+    set terrain-type "road"
+    set pcolor gray
+  ]
+
+  ;; Add one vertical road spanning the entire height of the map
+  ask patches with [pxcor = 40] [  ;; Vertical road at x = 40
+    set terrain-type "road"
+    set pcolor gray
+  ]
 end
+
 to setup-units
   ;; Israeli Tanks: 5 groups of 5 each => 25 tanks
   repeat 5 [
@@ -112,8 +125,8 @@ to setup-units
 
   ;; Egyptian Tanks: 5 groups of 5 each => 25 tanks
   repeat 5 [
-    let cluster-x (21 + random 4)  ;; Random x on the left side of the Chinese Farm
-    let cluster-y (40 + random 20) ;; Random y within the Chinese Farm area
+    let cluster-x 21  ;; Fixed x-coordinate on the western border of the Chinese Farm
+    let cluster-y (20 + random 60)  ;; Random y within the Chinese Farm area (20 to 80)
 
     create-egyptian-tanks 5 [
       set group-id group-counter
@@ -154,8 +167,8 @@ to setup-units
 
   ;; Egyptian Infantry: 5 groups of 5 each => 25 infantry
   repeat 5 [
-    let cluster-x (21 + random 4)  ;; Random x on the left side of the Chinese Farm
-    let cluster-y (40 + random 20) ;; Random y within the Chinese Farm area
+    let cluster-x (21 + random 39)  ;; Random x within the Chinese Farm area (21 to 60)
+    let cluster-y 20  ;; Fixed y-coordinate on the southern border of the Chinese Farm
 
     create-infantry 5 [
       set group-id group-counter
@@ -223,7 +236,7 @@ to q-learn-move-israeli
       execute-action a
 
       ;; Group cohesion logic
-      if distance my-group-center > 5 [
+      if distance my-group-center > 3 [
         setxy oldx oldy
       ]
     ]
@@ -275,7 +288,7 @@ to q-learn-move-egyptian
       execute-action a
 
       ;; Group cohesion logic
-      if distance my-group-center > 5 [
+      if distance my-group-center > 3 [
         setxy oldx oldy
       ]
     ]
@@ -334,7 +347,7 @@ to q-learn-move-israeli-infantry
       execute-action a
 
       ;; Group cohesion logic
-      if distance my-group-center > 5 [
+      if distance my-group-center > 3 [
         setxy oldx oldy
       ]
     ]
@@ -370,7 +383,7 @@ to q-learn-move-egyptian-infantry
     execute-action a
 
     ;; Group cohesion logic
-    if distance my-group-center > 5 [
+    if distance my-group-center > 3 [
       setxy oldx oldy
     ]
   ]
