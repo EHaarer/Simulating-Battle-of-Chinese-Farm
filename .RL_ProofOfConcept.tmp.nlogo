@@ -66,24 +66,19 @@ to setup
 end
 
 to setup-terrain
+  ;; Set the entire battlefield to desert
   ask patches [
-    ;; Canal spans x = canal-x-1, canal-x, canal-x+1
-    if (pxcor = canal-x - 1) or (pxcor = canal-x) or (pxcor = canal-x + 1) [
-      set terrain-type "water"
-      set pcolor blue
-    ]
-    if pxcor <= canal-x - 2 [
-      set terrain-type "desert-west"
-      set pcolor brown
-    ]
-    if pxcor >= canal-x + 2 [
-      set terrain-type "desert-east"
-      set pcolor yellow
-    ]
+    set terrain-type "desert-west"
+    set pcolor yellow
   ]
 
-  ;; "Chinese Farm" region on the west side
-  ask patches with [pxcor >= 5 and pxcor <= 30 and pycor >= 10 and pycor <= 40] [
+  ;; Add a full vertical blue line across the entire height of the map
+  ask patches with [pxcor = 20] [  ;; Vertical line at x = 20
+    set pcolor blue
+  ]
+
+  ;; Define the Chinese Farm as a larger rectangle to the right of the blue line
+  ask patches with [pxcor > 20 and pxcor <= 40 and pycor >= 20 and pycor <= 60] [
     set terrain-type "chinese-farm"
     set pcolor green
     set captured-by "none"  ;; Initialize to "none" for Chinese Farm patches
@@ -91,88 +86,11 @@ to setup-terrain
   set chinese-farm-patches patches with [terrain-type = "chinese-farm"]
 
   ;; Define the center patch of the Chinese Farm
-  let center-x 17
-  let center-y 24
+  let center-x 30  ;; Center x-coordinate of the Chinese Farm
+  let center-y 40  ;; Center y-coordinate of the Chinese Farm
   set chinese-farm-center patch center-x center-y
 end
 
-to setup-units
-  ;; Israeli Tanks: 5 groups of 5 each => 25 tanks
-  repeat 5 [
-    let cluster-x (canal-x + 5 + random 3)
-    let cluster-y (10 + random 5)
-
-    create-israeli-tanks 5 [
-      set group-id group-counter
-      set team "israeli"
-      set canal-wait -1
-      set shape "circle"
-      set color 135   ;; pink for Israeli tanks
-      setxy (cluster-x + random 2) (cluster-y + random 2)
-
-      set state (list xcor ycor)
-      set action ""
-    ]
-    set group-counter group-counter + 1
-  ]
-
-  ;; Egyptian Tanks: 5 groups of 5 each => 25 tanks
-  repeat 5 [
-    let cluster-x (5 + random 3)
-    let cluster-y (10 + random 5)
-
-    create-egyptian-tanks 5 [
-      set group-id group-counter
-      set team "egyptian"
-      set canal-wait -1
-      set shape "circle"
-      set color 25    ;; orange for Egyptian tanks
-      setxy (cluster-x + random 2) (cluster-y + random 2)
-
-      set state (list xcor ycor)
-      set action ""
-    ]
-    set group-counter group-counter + 1
-  ]
-
-  ;; Israeli Infantry: 5 groups of 5 each => 25 infantry
-  repeat 5 [
-    let cluster-x (canal-x + 2 + random 5)
-    let cluster-y (random 10)
-
-    create-infantry 5 [
-      set group-id group-counter
-      set team "israeli"
-      set canal-wait -1
-      set shape "person"
-      set color 105   ;; blue for Israeli infantry
-      setxy (cluster-x + random 2) (cluster-y + random 2)
-
-      set state (list xcor ycor)
-      set action ""
-    ]
-    set group-counter group-counter + 1
-  ]
-
-  ;; Egyptian Infantry: 5 groups of 5 each => 25 infantry
-  repeat 5 [
-    let cluster-x (random 10)
-    let cluster-y (20 + random 10)
-
-    create-infantry 5 [
-      set group-id group-counter
-      set team "egyptian"
-      set canal-wait -1
-      set shape "person"
-      set color 15    ;; red for Egyptian infantry
-      setxy (cluster-x + random 2) (cluster-y + random 2)
-
-      set state (list xcor ycor)
-      set action ""
-    ]
-    set group-counter group-counter + 1
-  ]
-end
 
 ;; =========================================
 ;; MAIN LOOP
@@ -706,7 +624,7 @@ false
 "" ""
 PENS
 "default" 1.0 0 -15637942 true "" "plot count turtles with [team = \"israeli\"]"
-"pen-1" 1.0 0 -5825686 true "" "plot count turtles with [team = \"Egyptian\"]"
+"pen-1" 1.0 0 -5825686 true "" "plot count turtles with [team = \"egyptian\"]"
 
 @#$#@#$#@
 ## WHAT IS IT?

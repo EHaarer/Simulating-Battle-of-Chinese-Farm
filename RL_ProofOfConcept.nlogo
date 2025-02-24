@@ -68,15 +68,11 @@ end
 to setup-terrain
   ask patches [
     ;; Canal spans x = canal-x-1, canal-x, canal-x+1
-    if (pxcor = canal-x - 1) or (pxcor = canal-x) or (pxcor = canal-x + 1) [
-      set terrain-type "water"
-      set pcolor blue
-    ]
-    if pxcor <= canal-x - 2 [
+    if pxcor <= canal-x  [
       set terrain-type "desert-west"
       set pcolor brown
     ]
-    if pxcor >= canal-x + 2 [
+    if pxcor >= canal-x  [
       set terrain-type "desert-east"
       set pcolor yellow
     ]
@@ -188,8 +184,8 @@ to go
   capture-chinese-farm  ;; Capture patches within the Chinese Farm
 
   ;; Display counts every tick
-  ;show (word "Israeli Units: " count turtles with [team = "israeli"])
-  ;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
+  show (word "Israeli Units: " count turtles with [team = "israeli"])
+  show (word "Egyptian Units: " count turtles with [team = "egyptian"])
 
   tick
 end
@@ -688,6 +684,25 @@ NIL
 NIL
 NIL
 1
+
+PLOT
+855
+188
+1055
+338
+Israeli vs Egyptian
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -15637942 true "" "plot count turtles with [team = \"israeli\"]"
+"pen-1" 1.0 0 -5825686 true "" "plot count turtles with [team = \"egyptian\"]"
 
 @#$#@#$#@
 ## WHAT IS IT?
