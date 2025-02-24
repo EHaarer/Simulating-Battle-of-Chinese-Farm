@@ -102,7 +102,6 @@ to setup-terrain
     set pcolor gray
   ]
 end
-
 to setup-units
   ;; Israeli Tanks: 5 groups of 5 each => 25 tanks
   repeat 5 [
@@ -124,9 +123,11 @@ to setup-units
   ]
 
   ;; Egyptian Tanks: 5 groups of 5 each => 25 tanks
+  ;; Spawn on the western and southern borders of the Chinese Farm
   repeat 5 [
-    let cluster-x 21  ;; Fixed x-coordinate on the western border of the Chinese Farm
-    let cluster-y (20 + random 60)  ;; Random y within the Chinese Farm area (20 to 80)
+    ;; Western border tanks
+    let cluster-x-west 21  ;; Fixed x-coordinate on the western border
+    let cluster-y-west (20 + random 60)  ;; Random y within the Chinese Farm area (20 to 80)
 
     create-egyptian-tanks 5 [
       set group-id group-counter
@@ -134,7 +135,28 @@ to setup-units
       set canal-wait -1
       set shape "circle"
       set color 25    ;; orange for Egyptian tanks
-      setxy cluster-x cluster-y
+      setxy cluster-x-west cluster-y-west
+
+      ;; Fortified positions: Stay in place initially
+      set state (list xcor ycor)
+      set action "hold-position"  ;; Default action for fortified troops
+
+      ;; Add a visual indicator for fortified positions (e.g., a black border)
+      set size 1.5  ;; Slightly larger to indicate fortification
+    ]
+    set group-counter group-counter + 1
+
+    ;; Southern border tanks
+    let cluster-x-south (21 + random 39)  ;; Random x within the Chinese Farm area (21 to 60)
+    let cluster-y-south 20  ;; Fixed y-coordinate on the southern border
+
+    create-egyptian-tanks 5 [
+      set group-id group-counter
+      set team "egyptian"
+      set canal-wait -1
+      set shape "circle"
+      set color 25    ;; orange for Egyptian tanks
+      setxy cluster-x-south cluster-y-south
 
       ;; Fortified positions: Stay in place initially
       set state (list xcor ycor)
@@ -166,9 +188,11 @@ to setup-units
   ]
 
   ;; Egyptian Infantry: 5 groups of 5 each => 25 infantry
+  ;; Spawn on the western and eastern borders of the Chinese Farm
   repeat 5 [
-    let cluster-x (21 + random 39)  ;; Random x within the Chinese Farm area (21 to 60)
-    let cluster-y 20  ;; Fixed y-coordinate on the southern border of the Chinese Farm
+    ;; Western border infantry
+    let cluster-x-west 21  ;; Fixed x-coordinate on the western border
+    let cluster-y-west (20 + random 60)  ;; Random y within the Chinese Farm area (20 to 80)
 
     create-infantry 5 [
       set group-id group-counter
@@ -176,7 +200,28 @@ to setup-units
       set canal-wait -1
       set shape "person"
       set color 15    ;; red for Egyptian infantry
-      setxy cluster-x cluster-y
+      setxy cluster-x-west cluster-y-west
+
+      ;; Fortified positions: Stay in place initially
+      set state (list xcor ycor)
+      set action "hold-position"  ;; Default action for fortified troops
+
+      ;; Add a visual indicator for fortified positions (e.g., a black border)
+      set size 1.5  ;; Slightly larger to indicate fortification
+    ]
+    set group-counter group-counter + 1
+
+    ;; Eastern border infantry
+    let cluster-x-east 60  ;; Fixed x-coordinate on the eastern border
+    let cluster-y-east (20 + random 60)  ;; Random y within the Chinese Farm area (20 to 80)
+
+    create-infantry 5 [
+      set group-id group-counter
+      set team "egyptian"
+      set canal-wait -1
+      set shape "person"
+      set color 15    ;; red for Egyptian infantry
+      setxy cluster-x-east cluster-y-east
 
       ;; Fortified positions: Stay in place initially
       set state (list xcor ycor)
