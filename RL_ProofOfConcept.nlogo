@@ -66,20 +66,19 @@ to setup
 end
 
 to setup-terrain
+  ;; Set the entire battlefield to desert
   ask patches [
-    ;; Canal spans x = canal-x-1, canal-x, canal-x+1
-    if pxcor <= canal-x  [
-      set terrain-type "desert-west"
-      set pcolor brown
-    ]
-    if pxcor >= canal-x  [
-      set terrain-type "desert-east"
-      set pcolor yellow
-    ]
+    set terrain-type "desert-west"
+    set pcolor yellow
   ]
 
-  ;; "Chinese Farm" region on the west side
-  ask patches with [pxcor >= 5 and pxcor <= 30 and pycor >= 10 and pycor <= 40] [
+  ;; Add a full vertical blue line across the entire height of the map
+  ask patches with [pxcor = 20] [  ;; Vertical line at x = 20
+    set pcolor blue
+  ]
+
+  ;; Define the Chinese Farm as a larger rectangle to the right of the blue line
+  ask patches with [pxcor > 20 and pxcor <= 40 and pycor >= 20 and pycor <= 60] [
     set terrain-type "chinese-farm"
     set pcolor green
     set captured-by "none"  ;; Initialize to "none" for Chinese Farm patches
@@ -87,16 +86,15 @@ to setup-terrain
   set chinese-farm-patches patches with [terrain-type = "chinese-farm"]
 
   ;; Define the center patch of the Chinese Farm
-  let center-x 17
-  let center-y 24
+  let center-x 30  ;; Center x-coordinate of the Chinese Farm
+  let center-y 40  ;; Center y-coordinate of the Chinese Farm
   set chinese-farm-center patch center-x center-y
 end
-
 to setup-units
   ;; Israeli Tanks: 5 groups of 5 each => 25 tanks
   repeat 5 [
-    let cluster-x (canal-x + 5 + random 3)
-    let cluster-y (10 + random 5)
+    let cluster-x (25 + random 15)  ;; Random x within the Chinese Farm area
+    let cluster-y (5 + random 5)    ;; Start from the south (low y-values)
 
     create-israeli-tanks 5 [
       set group-id group-counter
@@ -104,7 +102,7 @@ to setup-units
       set canal-wait -1
       set shape "circle"
       set color 135   ;; pink for Israeli tanks
-      setxy (cluster-x + random 2) (cluster-y + random 2)
+      setxy cluster-x cluster-y
 
       set state (list xcor ycor)
       set action ""
@@ -114,8 +112,8 @@ to setup-units
 
   ;; Egyptian Tanks: 5 groups of 5 each => 25 tanks
   repeat 5 [
-    let cluster-x (5 + random 3)
-    let cluster-y (10 + random 5)
+    let cluster-x (21 + random 4)  ;; Random x on the left side of the Chinese Farm
+    let cluster-y (40 + random 20) ;; Random y within the Chinese Farm area
 
     create-egyptian-tanks 5 [
       set group-id group-counter
@@ -123,18 +121,22 @@ to setup-units
       set canal-wait -1
       set shape "circle"
       set color 25    ;; orange for Egyptian tanks
-      setxy (cluster-x + random 2) (cluster-y + random 2)
+      setxy cluster-x cluster-y
 
+      ;; Fortified positions: Stay in place initially
       set state (list xcor ycor)
-      set action ""
+      set action "hold-position"  ;; Default action for fortified troops
+
+      ;; Add a visual indicator for fortified positions (e.g., a black border)
+      set size 1.5  ;; Slightly larger to indicate fortification
     ]
     set group-counter group-counter + 1
   ]
 
   ;; Israeli Infantry: 5 groups of 5 each => 25 infantry
   repeat 5 [
-    let cluster-x (canal-x + 2 + random 5)
-    let cluster-y (random 10)
+    let cluster-x (25 + random 15)  ;; Random x within the Chinese Farm area
+    let cluster-y (5 + random 5)    ;; Start from the south (low y-values)
 
     create-infantry 5 [
       set group-id group-counter
@@ -142,7 +144,7 @@ to setup-units
       set canal-wait -1
       set shape "person"
       set color 105   ;; blue for Israeli infantry
-      setxy (cluster-x + random 2) (cluster-y + random 2)
+      setxy cluster-x cluster-y
 
       set state (list xcor ycor)
       set action ""
@@ -152,8 +154,8 @@ to setup-units
 
   ;; Egyptian Infantry: 5 groups of 5 each => 25 infantry
   repeat 5 [
-    let cluster-x (random 10)
-    let cluster-y (20 + random 10)
+    let cluster-x (21 + random 4)  ;; Random x on the left side of the Chinese Farm
+    let cluster-y (40 + random 20) ;; Random y within the Chinese Farm area
 
     create-infantry 5 [
       set group-id group-counter
@@ -161,10 +163,14 @@ to setup-units
       set canal-wait -1
       set shape "person"
       set color 15    ;; red for Egyptian infantry
-      setxy (cluster-x + random 2) (cluster-y + random 2)
+      setxy cluster-x cluster-y
 
+      ;; Fortified positions: Stay in place initially
       set state (list xcor ycor)
-      set action ""
+      set action "hold-position"  ;; Default action for fortified troops
+
+      ;; Add a visual indicator for fortified positions (e.g., a black border)
+      set size 1.5  ;; Slightly larger to indicate fortification
     ]
     set group-counter group-counter + 1
   ]
@@ -245,20 +251,37 @@ to q-learn-move-egyptian
   let oldx xcor
   let oldy ycor
 
-  ;; If the unit is not in the Chinese Farm, use hardcoded movement
-  ifelse [terrain-type] of patch-here != "chinese-farm" [
-    move-toward-chinese-farm
-  ]
-  [
-    ;; If the unit is in the Chinese Farm, use Q-learning
-    execute-action a
+  ;; Check for nearby Israeli units
+  let nearby-israeli-tanks israeli-tanks in-radius 5
+  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 5
 
-    ;; Group cohesion logic
-    if distance my-group-center > 5 [
-      setxy oldx oldy
+  ;; If Israeli units are nearby, prioritize defense
+  if any? nearby-israeli-tanks or any? nearby-israeli-infantry [
+    ;; Move toward the nearest Israeli unit
+    let nearest-enemy min-one-of (turtle-set nearby-israeli-tanks nearby-israeli-infantry) [distance myself]
+    if nearest-enemy != nobody [
+      face nearest-enemy
+      fd 1
+    ]
+  ]
+  ;; If no Israeli units are nearby, use Q-learning
+  if not any? nearby-israeli-tanks and not any? nearby-israeli-infantry [
+    ;; If the unit is not in the Chinese Farm, use hardcoded movement
+    ifelse [terrain-type] of patch-here != "chinese-farm" [
+      move-toward-chinese-farm
+    ]
+    [
+      ;; If the unit is in the Chinese Farm, use Q-learning
+      execute-action a
+
+      ;; Group cohesion logic
+      if distance my-group-center > 5 [
+        setxy oldx oldy
+      ]
     ]
   ]
 
+  ;; Handle nearby enemy destruction
   let kills 0
   ask israeli-tanks in-radius 2 [
     die
@@ -272,6 +295,14 @@ to q-learn-move-egyptian
   let s2 (list xcor ycor)
   let r compute-reward s s2
   set r (r + 50 * kills)  ;; +50 per Israeli kill
+
+  ;; Penalty for moving away from the Chinese Farm
+  let target chinese-farm-center
+  let old-distance distancexy oldx oldy
+  let new-distance distancexy xcor ycor
+  if new-distance > old-distance [
+    set r (r - 100)  ;; Penalty for moving away from the Chinese Farm
+  ]
 
   update-q-table-egyptian s a r s2
 end
