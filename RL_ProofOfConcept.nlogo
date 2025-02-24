@@ -205,18 +205,25 @@ to q-learn-move-israeli
   let oldx xcor
   let oldy ycor
 
-  handle-canal-wait
-
-  ifelse (canal-wait > 0)
-  [
-    set canal-wait canal-wait - 1
+  ;; If the unit is not in the Chinese Farm, use hardcoded movement
+  ifelse [terrain-type] of patch-here != "chinese-farm" [
+    move-toward-chinese-farm
   ]
   [
-    execute-action a
+    ;; If the unit is in the Chinese Farm, use Q-learning
+    handle-canal-wait
 
-    ;; Group cohesion logic
-    if distance my-group-center > 5 [
-      setxy oldx oldy
+    ifelse (canal-wait > 0)
+    [
+      set canal-wait canal-wait - 1
+    ]
+    [
+      execute-action a
+
+      ;; Group cohesion logic
+      if distance my-group-center > 5 [
+        setxy oldx oldy
+      ]
     ]
   ]
 
@@ -242,11 +249,18 @@ to q-learn-move-egyptian
   let oldx xcor
   let oldy ycor
 
-  execute-action a
+  ;; If the unit is not in the Chinese Farm, use hardcoded movement
+  ifelse [terrain-type] of patch-here != "chinese-farm" [
+    move-toward-chinese-farm
+  ]
+  [
+    ;; If the unit is in the Chinese Farm, use Q-learning
+    execute-action a
 
-  ;; For Egyptian tanks, group cohesion distance <= 3
-  if distance my-group-center > 5 [
-    setxy oldx oldy
+    ;; Group cohesion logic
+    if distance my-group-center > 5 [
+      setxy oldx oldy
+    ]
   ]
 
   let kills 0
@@ -277,16 +291,25 @@ to q-learn-move-israeli-infantry
   let oldx xcor
   let oldy ycor
 
-  handle-canal-wait
-
-  ifelse (canal-wait > 0)
-  [
-    set canal-wait canal-wait - 1
+  ;; If the unit is not in the Chinese Farm, use hardcoded movement
+  ifelse [terrain-type] of patch-here != "chinese-farm" [
+    move-toward-chinese-farm
   ]
   [
-    execute-action a
-    if distance my-group-center > 5 [
-      setxy oldx oldy
+    ;; If the unit is in the Chinese Farm, use Q-learning
+    handle-canal-wait
+
+    ifelse (canal-wait > 0)
+    [
+      set canal-wait canal-wait - 1
+    ]
+    [
+      execute-action a
+
+      ;; Group cohesion logic
+      if distance my-group-center > 5 [
+        setxy oldx oldy
+      ]
     ]
   ]
 
@@ -311,11 +334,18 @@ to q-learn-move-egyptian-infantry
   let oldx xcor
   let oldy ycor
 
-  execute-action a
+  ;; If the unit is not in the Chinese Farm, use hardcoded movement
+  ifelse [terrain-type] of patch-here != "chinese-farm" [
+    move-toward-chinese-farm
+  ]
+  [
+    ;; If the unit is in the Chinese Farm, use Q-learning
+    execute-action a
 
-  ;; For Egyptian infantry, group cohesion distance <= 6
-  if distance my-group-center > 5 [
-    setxy oldx oldy
+    ;; Group cohesion logic
+    if distance my-group-center > 5 [
+      setxy oldx oldy
+    ]
   ]
 
   let kills 0
@@ -422,49 +452,49 @@ to execute-action [a]
   if a = "move-west"  [ set heading 270 fd 1 ]
 end
 
-to-report distance-to-farmer
-  let closest-farm min-one-of chinese-farm-patches [distance myself]  ; Find the closest farm patch
+;; Hardcoded movement to the Chinese Farm
+to move-toward-chinese-farm
+  let target chinese-farm-center  ;; Target is the center of the Chinese Farm
+  let delta-x [pxcor] of target - xcor  ;; Difference in x-coordinates
+  let delta-y [pycor] of target - ycor  ;; Difference in y-coordinates
 
-  let distance-to-farm [distance myself] of closest-farm  ; This is correctCalculate distance to the closest farm patch
-  report distance-to-farm  ; Return the calculated distance
+  ;; Move toward the target
+  ifelse abs delta-x > abs delta-y [
+    if delta-x > 0 [ set heading 90  fd 1 ]  ;; Move east
+    if delta-x < 0 [ set heading 270 fd 1 ]  ;; Move west
+  ]
+  [
+    if delta-y > 0 [ set heading 0   fd 1 ]  ;; Move north
+    if delta-y < 0 [ set heading 180 fd 1 ]  ;; Move south
+  ]
 end
 
 to-report compute-reward [s s2]
   let oldx item 0 s
   let newx item 0 s2
+  let oldy item 1 s
+  let newy item 1 s2
 
   ;; Base movement cost
   let reward -1
 
-  ;; Count friendly units alive
-  let friendly-units count turtles with [team = [team] of myself]
+  ;; Reward for capturing Chinese Farm patches
+  if [terrain-type] of patch newx newy = "chinese-farm" and [captured-by] of patch newx newy != team [
+    set reward (reward + 1000)  ;; Large reward for capturing a patch
+  ]
 
-  ;; Normalize unit count (Higher reward for more friendly units alive)
-  let unit-reward friendly-units * 50  ;; Each friendly unit adds +50 to the reward
+  ;; Penalty for staying idle or moving away from the Chinese Farm
+  let target chinese-farm-center
+  let target-x [pxcor] of target
+  let target-y [pycor] of target
+  let old-distance distancexy oldx oldy
+  let new-distance distancexy newx newy
+  if new-distance > old-distance [
+    set reward (reward - 100)  ;; Penalty for moving away from the target
+  ]
 
-  ;; Reward for controlling Chinese Farm patches
-  let controlled-patches count chinese-farm-patches with [captured-by = [team] of myself]
-  let control-reward controlled-patches * 1000  ;; +1000 for each controlled patch
-
-  ;; Reward for crossing the canal
-  ;;if (oldx >= canal-x and newx < canal-x) or (oldx < canal-x and newx >= canal-x) [
-  ;;  set reward (reward + 500)  ;; Large reward for crossing the canal
-  ;;]
-
-  ;; Penalty for staying on the wrong side
-  ;;if (team = "egyptian" and pxcor >= canal-x) or (team = "israeli" and pxcor < canal-x) [
-  ;;  set reward (reward - 1000)  ;; Penalty for being on the wrong side
-  ;;]
-
-  ;; Reward based on proximity to the center of the Chinese Farm
-  let distance-to-center team-distance chinese-farm-center
-  let proximity-reward  -1000 + (distance-to-center * 10)  ;; +1000 at center, decreasing by 10 per unit distance
-  ;show (word "Distance to center: " distance-to-center ", Proximity reward: " proximity-reward)
-
-  ;; Combine all rewards
-  let total-reward reward + unit-reward + control-reward + proximity-reward
-  ;show (word "Total reward: " total-reward)
-  report total-reward
+  ;; Missing REPORT statement here
+  report reward
 end
 
 to update-q-table-israeli [s a r s2]

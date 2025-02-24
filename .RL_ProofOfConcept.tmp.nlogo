@@ -188,8 +188,8 @@ to go
   capture-chinese-farm  ;; Capture patches within the Chinese Farm
 
   ;; Display counts every tick
-  ;show (word "Israeli Units: " count turtles with [team = "israeli"])
-  ;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
+  show (word "Israeli Units: " count turtles with [team = "israeli"])
+  show (word "Egyptian Units: " count turtles with [team = "egyptian"])
 
   tick
 end
@@ -494,7 +494,7 @@ to-report compute-reward [s s2]
   ]
 
   ;; Missing REPORT statement here
-
+  report reward
 end
 
 to update-q-table-israeli [s a r s2]
@@ -688,6 +688,25 @@ NIL
 NIL
 NIL
 1
+
+PLOT
+855
+188
+1055
+338
+Israeli vs Egyptian
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -15637942 true "" "plot count turtles with [team = \"israeli\"]"
+"pen-1" 1.0 0 -5825686 true "" "plot count turtles with [team = \"Egyptian\"]"
 
 @#$#@#$#@
 ## WHAT IS IT?
