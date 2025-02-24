@@ -77,8 +77,8 @@ to setup-terrain
     set pcolor blue
   ]
 
-  ;; Define the Chinese Farm as a larger rectangle to the right of the blue line
-  ask patches with [pxcor > 20 and pxcor <= 40 and pycor >= 20 and pycor <= 60] [
+  ;; Define the Chinese Farm as a significantly larger rectangle to the right of the blue line
+  ask patches with [pxcor > 20 and pxcor <= 60 and pycor >= 20 and pycor <= 80] [
     set terrain-type "chinese-farm"
     set pcolor green
     set captured-by "none"  ;; Initialize to "none" for Chinese Farm patches
@@ -86,10 +86,23 @@ to setup-terrain
   set chinese-farm-patches patches with [terrain-type = "chinese-farm"]
 
   ;; Define the center patch of the Chinese Farm
-  let center-x 30  ;; Center x-coordinate of the Chinese Farm
-  let center-y 40  ;; Center y-coordinate of the Chinese Farm
+  let center-x 40  ;; Adjusted center x-coordinate
+  let center-y 50  ;; Adjusted center y-coordinate
   set chinese-farm-center patch center-x center-y
+
+  ;; Add one horizontal road spanning the entire width of the map
+  ask patches with [pycor = 30] pxcor > 10] [  ;; Horizontal road at y = 50
+    set terrain-type "road"
+    set pcolor gray
+  ]
+
+  ;; Add one vertical road spanning the entire height of the map
+  ask patches with [pxcor = 40] [  ;; Vertical road at x = 40
+    set terrain-type "road"
+    set pcolor gray
+  ]
 end
+
 to setup-units
   ;; Israeli Tanks: 5 groups of 5 each => 25 tanks
   repeat 5 [
@@ -223,7 +236,7 @@ to q-learn-move-israeli
       execute-action a
 
       ;; Group cohesion logic
-      if distance my-group-center > 5 [
+      if distance my-group-center > 3 [
         setxy oldx oldy
       ]
     ]
@@ -275,7 +288,7 @@ to q-learn-move-egyptian
       execute-action a
 
       ;; Group cohesion logic
-      if distance my-group-center > 5 [
+      if distance my-group-center > 3 [
         setxy oldx oldy
       ]
     ]
@@ -299,7 +312,7 @@ to q-learn-move-egyptian
   ;; Penalty for moving away from the Chinese Farm
   let target chinese-farm-center
   let old-distance distancexy oldx oldy
-  let new-distance distancexy xcor ycor target
+  let new-distance distancexy xcor ycor
   if new-distance > old-distance [
     set r (r - 100)  ;; Penalty for moving away from the Chinese Farm
   ]
@@ -334,7 +347,7 @@ to q-learn-move-israeli-infantry
       execute-action a
 
       ;; Group cohesion logic
-      if distance my-group-center > 5 [
+      if distance my-group-center > 3 [
         setxy oldx oldy
       ]
     ]
@@ -370,7 +383,7 @@ to q-learn-move-egyptian-infantry
     execute-action a
 
     ;; Group cohesion logic
-    if distance my-group-center > 5 [
+    if distance my-group-center > 3 [
       setxy oldx oldy
     ]
   ]
