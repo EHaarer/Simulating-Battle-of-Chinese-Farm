@@ -39,7 +39,7 @@ turtles-own [
   group-id
   canal-wait
   has-crossed-canal
-  canal-timer  ;; Add this line to track time on the canal
+  canal-timer  ;; Track time on the canal
 ]
 
 to setup
@@ -91,7 +91,7 @@ to setup-terrain
   set chinese-farm-center patch center-x center-y
 
   ;; Add one horizontal road spanning the entire width of the map
-  ask patches with [pycor = 30 and pxcor > 20] [  ;; Horizontal road at y = 50
+  ask patches with [pycor = 30 and pxcor > 20] [  ;; Horizontal road at y = 30
     set terrain-type "road"
     set pcolor gray
   ]
@@ -102,6 +102,7 @@ to setup-terrain
     set pcolor gray
   ]
 end
+
 to setup-units
   ;; Israeli Tanks: 5 groups of 5 each => 25 tanks
   repeat 5 [
@@ -141,8 +142,8 @@ to setup-units
       set state (list xcor ycor)
       set action "hold-position"  ;; Default action for fortified troops
 
-      ;; Add a visual indicator for fortified positions (e.g., a black border)
-      set size 1.5  ;; Slightly larger to indicate fortification
+      ;; Visual indicator for fortification
+      set size 1.5
     ]
     set group-counter group-counter + 1
 
@@ -158,27 +159,24 @@ to setup-units
       set color 25    ;; orange for Egyptian tanks
       setxy cluster-x-south cluster-y-south
 
-      ;; Fortified positions: Stay in place initially
       set state (list xcor ycor)
-      set action "hold-position"  ;; Default action for fortified troops
-
-      ;; Add a visual indicator for fortified positions (e.g., a black border)
-      set size 1.5  ;; Slightly larger to indicate fortification
+      set action "hold-position"
+      set size 1.5
     ]
     set group-counter group-counter + 1
   ]
 
   ;; Israeli Infantry: 5 groups of 5 each => 25 infantry
   repeat 5 [
-    let cluster-x (25 + random 15)  ;; Random x within the Chinese Farm area
-    let cluster-y (5 + random 5)    ;; Start from the south (low y-values)
+    let cluster-x (25 + random 15)
+    let cluster-y (5 + random 5)
 
     create-infantry 5 [
       set group-id group-counter
       set team "israeli"
       set canal-wait -1
       set shape "person"
-      set color 105   ;; blue for Israeli infantry
+      set color 0   ;; blue for Israeli infantry
       setxy cluster-x cluster-y
 
       set state (list xcor ycor)
@@ -191,8 +189,8 @@ to setup-units
   ;; Spawn on the western and eastern borders of the Chinese Farm
   repeat 5 [
     ;; Western border infantry
-    let cluster-x-west 21  ;; Fixed x-coordinate on the western border
-    let cluster-y-west (20 + random 60)  ;; Random y within the Chinese Farm area (20 to 80)
+    let cluster-x-west 21
+    let cluster-y-west (20 + random 60)
 
     create-infantry 5 [
       set group-id group-counter
@@ -202,18 +200,15 @@ to setup-units
       set color 15    ;; red for Egyptian infantry
       setxy cluster-x-west cluster-y-west
 
-      ;; Fortified positions: Stay in place initially
       set state (list xcor ycor)
-      set action "hold-position"  ;; Default action for fortified troops
-
-      ;; Add a visual indicator for fortified positions (e.g., a black border)
-      set size 1.5  ;; Slightly larger to indicate fortification
+      set action "hold-position"
+      set size 1.5
     ]
     set group-counter group-counter + 1
 
     ;; Eastern border infantry
-    let cluster-x-east 60  ;; Fixed x-coordinate on the eastern border
-    let cluster-y-east (20 + random 60)  ;; Random y within the Chinese Farm area (20 to 80)
+    let cluster-x-east 60
+    let cluster-y-east (20 + random 60)
 
     create-infantry 5 [
       set group-id group-counter
@@ -223,12 +218,9 @@ to setup-units
       set color 15    ;; red for Egyptian infantry
       setxy cluster-x-east cluster-y-east
 
-      ;; Fortified positions: Stay in place initially
       set state (list xcor ycor)
-      set action "hold-position"  ;; Default action for fortified troops
-
-      ;; Add a visual indicator for fortified positions (e.g., a black border)
-      set size 1.5  ;; Slightly larger to indicate fortification
+      set action "hold-position"
+      set size 1.5
     ]
     set group-counter group-counter + 1
   ]
@@ -245,7 +237,8 @@ to go
   ask infantry with [team = "egyptian"] [ q-learn-move-egyptian-infantry ]
 
   check-shooting
-  capture-chinese-farm  ;; Capture patches within the Chinese Farm
+  capture-chinese-farm
+  reinforce-chinese-farm
 
   ;; Display counts every tick
   show (word "Israeli Units: " count turtles with [team = "israeli"])
@@ -265,12 +258,10 @@ to q-learn-move-israeli
   let oldx xcor
   let oldy ycor
 
-  ;; If the unit is not in the Chinese Farm, use hardcoded movement
   ifelse [terrain-type] of patch-here != "chinese-farm" [
     move-toward-chinese-farm
   ]
   [
-    ;; If the unit is in the Chinese Farm, use Q-learning
     handle-canal-wait
 
     ifelse (canal-wait > 0)
@@ -280,10 +271,8 @@ to q-learn-move-israeli
     [
       execute-action a
 
-      ;; Group cohesion logic
-      if distance my-group-center > 3 [
-        setxy oldx oldy
-      ]
+      ;; Relaxed group cohesion: threshold increased to 5
+      if distance my-group-center > 5 [ setxy oldx oldy ]
     ]
   ]
 
@@ -309,37 +298,29 @@ to q-learn-move-egyptian
   let oldx xcor
   let oldy ycor
 
-  ;; Check for nearby Israeli units
   let nearby-israeli-tanks israeli-tanks in-radius 5
   let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 5
 
-  ;; If Israeli units are nearby, prioritize defense
   if any? nearby-israeli-tanks or any? nearby-israeli-infantry [
-    ;; Move toward the nearest Israeli unit
+    ;; Prioritize defense by moving toward the enemy
     let nearest-enemy min-one-of (turtle-set nearby-israeli-tanks nearby-israeli-infantry) [distance myself]
     if nearest-enemy != nobody [
       face nearest-enemy
       fd 1
     ]
   ]
-  ;; If no Israeli units are nearby, use Q-learning
   if not any? nearby-israeli-tanks and not any? nearby-israeli-infantry [
-    ;; If the unit is not in the Chinese Farm, use hardcoded movement
     ifelse [terrain-type] of patch-here != "chinese-farm" [
       move-toward-chinese-farm
     ]
     [
-      ;; If the unit is in the Chinese Farm, use Q-learning
       execute-action a
 
-      ;; Group cohesion logic
-      if distance my-group-center > 3 [
-        setxy oldx oldy
-      ]
+      ;; Relaxed group cohesion: threshold increased to 5
+      if distance my-group-center > 5 [ setxy oldx oldy ]
     ]
   ]
 
-  ;; Handle nearby enemy destruction
   let kills 0
   ask israeli-tanks in-radius 2 [
     die
@@ -352,14 +333,17 @@ to q-learn-move-egyptian
 
   let s2 (list xcor ycor)
   let r compute-reward s s2
-  set r (r + 50 * kills)  ;; +50 per Israeli kill
+  set r (r + 50 * kills)
 
-  ;; Penalty for moving away from the Chinese Farm
   let target chinese-farm-center
   let old-distance distancexy oldx oldy
   let new-distance distancexy xcor ycor
   if new-distance > old-distance [
-    set r (r - 100)  ;; Penalty for moving away from the Chinese Farm
+    ifelse any? turtles in-radius 5 with [ team != [ team ] of myself ] [
+      set r r - 50  ;; Reduced penalty when enemy is nearby
+    ] [
+      set r r - 100
+    ]
   ]
 
   update-q-table-egyptian s a r s2
@@ -376,12 +360,10 @@ to q-learn-move-israeli-infantry
   let oldx xcor
   let oldy ycor
 
-  ;; If the unit is not in the Chinese Farm, use hardcoded movement
   ifelse [terrain-type] of patch-here != "chinese-farm" [
     move-toward-chinese-farm
   ]
   [
-    ;; If the unit is in the Chinese Farm, use Q-learning
     handle-canal-wait
 
     ifelse (canal-wait > 0)
@@ -391,14 +373,10 @@ to q-learn-move-israeli-infantry
     [
       execute-action a
 
-      ;; Group cohesion logic
-      if distance my-group-center > 3 [
-        setxy oldx oldy
-      ]
+      if distance my-group-center > 5 [ setxy oldx oldy ]
     ]
   ]
 
-  ;; Possibly kill adjacent Egyptian infantry (no kill reward)
   ask infantry with [team = "egyptian"] in-radius 2 [ die ]
 
   let s2 (list xcor ycor)
@@ -419,18 +397,13 @@ to q-learn-move-egyptian-infantry
   let oldx xcor
   let oldy ycor
 
-  ;; If the unit is not in the Chinese Farm, use hardcoded movement
   ifelse [terrain-type] of patch-here != "chinese-farm" [
     move-toward-chinese-farm
   ]
   [
-    ;; If the unit is in the Chinese Farm, use Q-learning
     execute-action a
 
-    ;; Group cohesion logic
-    if distance my-group-center > 3 [
-      setxy oldx oldy
-    ]
+    if distance my-group-center > 5 [ setxy oldx oldy ]
   ]
 
   let kills 0
@@ -456,22 +429,18 @@ end
 
 to handle-canal-wait
   if (canal-wait < 0) [
-    ;; If we step onto the canal columns, start a short wait
     if (pxcor = canal-x - 1 or pxcor = canal-x or pxcor = canal-x + 1) [
-      set canal-wait 5  ;; Reduced wait time from 10 to 5 ticks
-      set canal-timer 0  ;; Reset the timer when entering the canal
+      set canal-wait 5  ;; Reduced wait time
+      set canal-timer 0  ;; Reset timer when entering canal
     ]
   ]
-  ;; Increment the timer when on the canal
   if (pxcor = canal-x - 1 or pxcor = canal-x or pxcor = canal-x + 1) [
     set canal-timer canal-timer + 1
   ]
-
-  ;; Check if the agent has been on the canal for the required time
   if canal-timer >= 5 [
-    set canal-wait -1  ;; Force the turtle to stop waiting on the canal
-    set canal-timer 0  ;; Reset the timer
-    set has-crossed-canal true  ;; Mark the unit as having crossed the canal
+    set canal-wait -1
+    set canal-timer 0
+    set has-crossed-canal true
   ]
 end
 
@@ -488,20 +457,34 @@ end
 
 to-report choose-action-egyptian [s]
   if (random-float 1 < epsilon) [
-    report one-of ["move-north" "move-south" "move-east" "move-west"]
+    report one-of ["move-north" "move-south" "move-east" "move-west" "defend"]
   ]
   report max-arg s "egyptian"
 end
 
 to-report max-arg [s side]
-  let best-option "move-north"
-  let best-value -99999
+  ;; Include "defend" as an option only for Egyptian units
+  if side = "egyptian" [
+    let actions ["move-north" "move-south" "move-east" "move-west" "defend"]
+    let best-option first actions
+    let best-value -99999
+    foreach actions [ a ->
+      let v (ifelse-value (side = "israeli")
+                [ q-value-israeli s a ]
+                [ q-value-egyptian s a ])
+      if v > best-value [
+        set best-option a
+        set best-value v
+      ]
+    ]
+    report best-option
+  ]
+  ;; For Israeli units, only allow movement actions.
   let actions ["move-north" "move-south" "move-east" "move-west"]
-
+  let best-option first actions
+  let best-value -99999
   foreach actions [ a ->
-    let v (ifelse-value (side = "israeli")
-              [ q-value-israeli s a ]
-              [ q-value-egyptian s a ])
+    let v q-value-israeli s a
     if v > best-value [
       set best-option a
       set best-value v
@@ -535,50 +518,54 @@ to execute-action [a]
   if a = "move-south" [ set heading 180 fd 1 ]
   if a = "move-east"  [ set heading 90  fd 1 ]
   if a = "move-west"  [ set heading 270 fd 1 ]
+  if a = "defend" [
+    ;; For Egyptian units: face the nearest Israeli enemy and move forward
+    let nearest-enemy min-one-of turtles with [team = "israeli"] [distance myself]
+    if nearest-enemy != nobody [
+      face nearest-enemy
+      fd 1
+    ]
+  ]
 end
 
-;; Hardcoded movement to the Chinese Farm
 to move-toward-chinese-farm
-  let target chinese-farm-center  ;; Target is the center of the Chinese Farm
-  let delta-x [pxcor] of target - xcor  ;; Difference in x-coordinates
-  let delta-y [pycor] of target - ycor  ;; Difference in y-coordinates
-
-  ;; Move toward the target
+  let target chinese-farm-center
+  let delta-x [pxcor] of target - xcor
+  let delta-y [pycor] of target - ycor
   ifelse abs delta-x > abs delta-y [
-    if delta-x > 0 [ set heading 90  fd 1 ]  ;; Move east
-    if delta-x < 0 [ set heading 270 fd 1 ]  ;; Move west
+    if delta-x > 0 [ set heading 90  fd 1 ]
+    if delta-x < 0 [ set heading 270 fd 1 ]
   ]
   [
-    if delta-y > 0 [ set heading 0   fd 1 ]  ;; Move north
-    if delta-y < 0 [ set heading 180 fd 1 ]  ;; Move south
+    if delta-y > 0 [ set heading 0   fd 1 ]
+    if delta-y < 0 [ set heading 180 fd 1 ]
   ]
 end
-
 to-report compute-reward [s s2]
   let oldx item 0 s
   let newx item 0 s2
   let oldy item 1 s
   let newy item 1 s2
 
-  ;; Base movement cost
+  ;; Declare the local variable "reward"
   let reward -1
 
-  ;; Reward for capturing Chinese Farm patches
   if [terrain-type] of patch newx newy = "chinese-farm" and [captured-by] of patch newx newy != team [
-    set reward (reward + 1000)  ;; Large reward for capturing a patch
+    set reward reward + 1000
   ]
 
-  ;; Penalty for staying idle or moving away from the Chinese Farm
   let target chinese-farm-center
-  let target-x [pxcor] of target
-  let target-y [pycor] of target
   let old-distance distancexy oldx oldy
   let new-distance distancexy newx newy
+
   if new-distance > old-distance [
-    set reward (reward - 100)  ;; Penalty for moving away from the target
+    ifelse any? turtles in-radius 5 with [ team != [ team ] of myself ] [
+      set reward reward - 50  ;; Reduced penalty when enemy is nearby
+    ] [
+      set reward reward - 100
+    ]
   ]
 
-  ;; Missing REPORT statement here
   report reward
 end
 
@@ -592,7 +579,7 @@ end
 
 to update-q-table-egyptian [s a r s2]
   let max-q max map [x -> q-value-egyptian s2 x]
-               ["move-north" "move-south" "move-east" "move-west"]
+               ["move-north" "move-south" "move-east" "move-west" "defend"]
   let old-q q-value-egyptian s a
   let q-update ((1 - alpha) * old-q) + (alpha * (r + gamma * max-q))
   set q-table-egyptian update-q-entry q-table-egyptian s a q-update
@@ -627,26 +614,25 @@ end
 ;; =========================================
 
 to check-shooting
-  ;; 1) Infantry shoot enemy infantry in radius 3 (cannot shoot tanks)
+  ;; Infantry shoot enemy infantry in radius 3 (cannot shoot tanks)
   ask infantry [
     let targets infantry in-radius 3 with [team != [team] of myself]
     ask targets [
       die
       ask chinese-farm-patches with [captured-by = [team] of myself] [
         set captured-by "none"
-        set pcolor green  ;; Reset color to green (neutral)
+        set pcolor green
       ]
     ]
   ]
-
-  ;; 2) Tanks shoot any enemy (tanks or infantry) in radius 5
+  ;; Tanks shoot any enemy (tanks or infantry) in radius 5
   ask israeli-tanks [
     let targets turtles in-radius 5 with [team = "egyptian"]
     ask targets [
       die
       ask chinese-farm-patches with [captured-by = [team] of myself] [
         set captured-by "none"
-        set pcolor green  ;; Reset color to green (neutral)
+        set pcolor green
       ]
     ]
   ]
@@ -656,7 +642,7 @@ to check-shooting
       die
       ask chinese-farm-patches with [captured-by = [team] of myself] [
         set captured-by "none"
-        set pcolor green  ;; Reset color to green (neutral)
+        set pcolor green
       ]
     ]
   ]
@@ -674,7 +660,7 @@ to capture-chinese-farm
       ask patch-here [
         if terrain-type = "chinese-farm" and captured-by != "israeli" [
           set captured-by "israeli"
-          set pcolor blue  ;; Change color to blue for Israeli control
+          set pcolor blue
         ]
       ]
     ]
@@ -682,7 +668,7 @@ to capture-chinese-farm
       ask patch-here [
         if terrain-type = "chinese-farm" and captured-by != "egyptian" [
           set captured-by "egyptian"
-          set pcolor green  ;; Change color to green for Egyptian control
+          set pcolor green
         ]
       ]
     ]
@@ -694,22 +680,41 @@ to-report distance-to-chinese-farm-center
 end
 
 to-report team-distance [target-patch]
-  ;; Check the team and position of the turtle
   ifelse team = "egyptian" [
-    ;; Egyptians are on the west side, so only calculate distance if they are west of the canal
     if pxcor < canal-x [
       report distance target-patch
     ]
-    ;; If Egyptians are on the east side, return a large distance (or handle as needed)
-    report 9999  ;; Arbitrary large value to indicate invalid distance
+    report 9999
   ]
   [
-    ;; Israelis are on the east side, so only calculate distance if they are east of the canal
     if pxcor >= canal-x [
       report distance target-patch
     ]
-    ;; If Israelis are on the west side, return a large distance (or handle as needed)
-    report 9999  ;; Arbitrary large value to indicate invalid distance
+    report 9999
+  ]
+end
+
+
+to reinforce-chinese-farm
+  ;; For Egyptian Tanks on Chinese Farm
+  ask egyptian-tanks with [[terrain-type] of patch-here = "chinese-farm"] [
+    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 10 [
+      let target min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] [ distance myself ]
+      if target != nobody [
+        face target
+        fd 1
+      ]
+    ]
+  ]
+  ;; For Egyptian Infantry on Chinese Farm
+  ask infantry with [ team = "egyptian" and [terrain-type] of patch-here = "chinese-farm"] [
+    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 10 [
+      let target min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] [ distance myself ]
+      if target != nobody [
+        face target
+        fd 1
+      ]
+    ]
   ]
 end
 @#$#@#$#@
