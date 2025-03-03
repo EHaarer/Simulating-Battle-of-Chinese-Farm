@@ -39,7 +39,8 @@ turtles-own [
   group-id
   canal-wait
   has-crossed-canal
-  canal-timer  ;; Track time on the canal
+  canal-timer
+  defense-center  ;; New variable for Egyptian infantry defensive center
 ]
 
 to setup
@@ -290,11 +291,41 @@ end
 ;; Q-LEARNING FOR EGYPTIAN TANKS
 ;; (Kill reward: +50 per Israeli killed)
 ;; =========================================
-
 to q-learn-move-egyptian
+  ;; If the tank is meant to hold its defensive radius
+  if action = "hold-position" [
+    ;; Ensure the tank is inside the Chinese Farm; if not, move in.
+    if [terrain-type] of patch-here != "chinese-farm" [
+      move-toward-chinese-farm
+      stop  ;; Stop further actions until next tick
+    ]
+
+    ;; Ensure defense-center is a list (it might be 0 by default)
+    if not is-list? defense-center [ set defense-center (list xcor ycor) ]
+
+    ifelse any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm" ] in-radius 3 [
+      ;; If an enemy is nearby within a radius of 3, react by facing and stepping toward it.
+      let nearest-enemy min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm" ] [ distance myself ]
+      if nearest-enemy != nobody [
+        face nearest-enemy
+        fd 0.5  ;; Minimal movement to engage the enemy
+      ]
+    ] [
+      ;; Otherwise, patrol by wandering within the defensive circle
+      rt (random 20 - 10)  ;; Small random turn
+      fd 0.3            ;; Take a small step
+      ;; If the unit strays beyond 3 patches from its defense center, steer back
+      if distancexy (item 0 defense-center) (item 1 defense-center) > 3 [
+        face patch (item 0 defense-center) (item 1 defense-center)
+        bk 0.3
+      ]
+    ]
+    stop  ;; End the procedure for this tick (no Q-learning move)
+  ]
+
+  ;; --- Normal Q-learning behavior for units not set to hold position ---
   let s (list xcor ycor)
   let a choose-action-egyptian s
-
   let oldx xcor
   let oldy ycor
 
@@ -302,8 +333,7 @@ to q-learn-move-egyptian
   let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 5
 
   if any? nearby-israeli-tanks or any? nearby-israeli-infantry [
-    ;; Prioritize defense by moving toward the enemy
-    let nearest-enemy min-one-of (turtle-set nearby-israeli-tanks nearby-israeli-infantry) [distance myself]
+    let nearest-enemy min-one-of (turtle-set nearby-israeli-tanks nearby-israeli-infantry) [ distance myself ]
     if nearest-enemy != nobody [
       face nearest-enemy
       fd 1
@@ -315,8 +345,6 @@ to q-learn-move-egyptian
     ]
     [
       execute-action a
-
-      ;; Relaxed group cohesion: threshold increased to 5
       if distance my-group-center > 5 [ setxy oldx oldy ]
     ]
   ]
@@ -335,12 +363,11 @@ to q-learn-move-egyptian
   let r compute-reward s s2
   set r (r + 50 * kills)
 
-  let target chinese-farm-center
   let old-distance distancexy oldx oldy
   let new-distance distancexy xcor ycor
   if new-distance > old-distance [
     ifelse any? turtles in-radius 5 with [ team != [ team ] of myself ] [
-      set r r - 50  ;; Reduced penalty when enemy is nearby
+      set r r - 50
     ] [
       set r r - 100
     ]
@@ -389,11 +416,41 @@ end
 ;; Q-LEARNING FOR EGYPTIAN INFANTRY
 ;; (Kill reward: +50 per Israeli killed)
 ;; =========================================
-
 to q-learn-move-egyptian-infantry
+  ;; If the infantry unit is set to "hold-position", patrol within a 3-patch radius
+  if action = "hold-position" [
+    ;; Ensure the unit is inside the Chinese Farm; if not, move in.
+    if [terrain-type] of patch-here != "chinese-farm" [
+      move-toward-chinese-farm
+      stop  ;; Do nothing further until next tick
+    ]
+
+    ;; Ensure defense-center is a list (it might be 0 by default)
+    if not is-list? defense-center [ set defense-center (list xcor ycor) ]
+
+    ifelse any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm" ] in-radius 3 [
+      ;; If an enemy is detected within a radius of 3, face and take a small step toward it.
+      let nearest-enemy min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm" ] [ distance myself ]
+      if nearest-enemy != nobody [
+        face nearest-enemy
+        fd 0.3  ;; Minimal movement to indicate engagement
+      ]
+    ] [
+      ;; Otherwise, patrol by wandering randomly within the defensive circle
+      rt (random 20 - 10)  ;; Small random turn
+      fd 0.3            ;; Take a small step forward
+      ;; If the unit strays beyond 3 patches from its defense-center, turn back and step back slightly
+      if distancexy (item 0 defense-center) (item 1 defense-center) > 3 [
+        face patch (item 0 defense-center) (item 1 defense-center)
+        bk 0.3
+      ]
+    ]
+    stop  ;; End the procedure for this tick (skip Q-learning movement)
+  ]
+
+  ;; --- Normal Q-learning behavior for units not set to hold position ---
   let s (list xcor ycor)
   let a choose-action-egyptian s
-
   let oldx xcor
   let oldy ycor
 
@@ -402,16 +459,16 @@ to q-learn-move-egyptian-infantry
   ]
   [
     execute-action a
-
     if distance my-group-center > 5 [ setxy oldx oldy ]
   ]
 
+  ;; Handle enemy kills and update reward based on kills
   let kills 0
-  ask infantry with [team = "israeli"] in-radius 2 [
+  ask israeli-tanks in-radius 2 [
     die
     set kills kills + 1
   ]
-  ask israeli-tanks in-radius 2 [
+  ask infantry with [team = "israeli"] in-radius 2 [
     die
     set kills kills + 1
   ]
@@ -420,9 +477,19 @@ to q-learn-move-egyptian-infantry
   let r compute-reward s s2
   set r (r + 50 * kills)
 
+  ;; Apply additional penalty if the move increases the distance from the target
+  let old-distance distancexy oldx oldy
+  let new-distance distancexy xcor ycor
+  if new-distance > old-distance [
+    ifelse any? turtles in-radius 5 with [ team != [team] of myself ] [
+      set r r - 50
+    ] [
+      set r r - 100
+    ]
+  ]
+
   update-q-table-egyptian s a r s2
 end
-
 ;; =========================================
 ;; CANAL WAIT (ISRAELI ONLY)
 ;; =========================================
@@ -695,24 +762,28 @@ to-report team-distance [target-patch]
 end
 
 
+;; =========================================
+;; Reinforce chinese farm
+;; =========================================
+
 to reinforce-chinese-farm
   ;; For Egyptian Tanks on Chinese Farm
   ask egyptian-tanks with [[terrain-type] of patch-here = "chinese-farm"] [
-    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 10 [
+    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 5 [
       let target min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] [ distance myself ]
       if target != nobody [
         face target
-        fd 1
+        fd 0.5
       ]
     ]
   ]
   ;; For Egyptian Infantry on Chinese Farm
   ask infantry with [ team = "egyptian" and [terrain-type] of patch-here = "chinese-farm"] [
-    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 10 [
+    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 5 [
       let target min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] [ distance myself ]
       if target != nobody [
         face target
-        fd 1
+        fd 0.5
       ]
     ]
   ]

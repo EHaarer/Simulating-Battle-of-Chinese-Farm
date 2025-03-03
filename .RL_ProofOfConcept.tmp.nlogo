@@ -769,17 +769,17 @@ end
 to reinforce-chinese-farm
   ;; For Egyptian Tanks on Chinese Farm
   ask egyptian-tanks with [[terrain-type] of patch-here = "chinese-farm"] [
-    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 20 [
+    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 5 [
       let target min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] [ distance myself ]
       if target != nobody [
         face target
-        fd 0.5
+        fd 0.
       ]
     ]
   ]
   ;; For Egyptian Infantry on Chinese Farm
   ask infantry with [ team = "egyptian" and [terrain-type] of patch-here = "chinese-farm"] [
-    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 2 [
+    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 5 [
       let target min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] [ distance myself ]
       if target != nobody [
         face target
