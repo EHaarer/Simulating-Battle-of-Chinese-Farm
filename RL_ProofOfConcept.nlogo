@@ -13,6 +13,9 @@ globals [
   gamma
   epsilon
 
+  ;; Chance that a shooting event actually kills the target (0 to 1)
+  kill-prob
+
   ;; Group IDs to keep track of which turtles spawn together
   group-counter
 
@@ -34,9 +37,12 @@ turtles-own [
   action
   team
   group-id
-  defense-center  ;; New variable for Egyptian infantry defensive center
+  defense-center  ;; Used for Egyptian defensive positioning
 ]
 
+;------------------------------------------------
+; SETUP PROCEDURES
+;------------------------------------------------
 to setup
   clear-all
   set battlefield-width 100
@@ -46,6 +52,7 @@ to setup
   set alpha 0.1
   set gamma 0.9
   set epsilon 0.5
+  set kill-prob 0.5
   set q-table-israeli []
   set q-table-egyptian []
   set group-counter 0
@@ -61,32 +68,26 @@ to setup-terrain
     set terrain-type "desert-west"
     set pcolor yellow
   ]
-
-  ;; Add a full vertical blue line across the entire height of the map
-  ask patches with [pxcor = 20] [
+  ;; Add a vertical blue line (for visual reference)
+  ask patches with [pxcor <= 20 and pxcor >= 19] [
     set pcolor blue
   ]
-
-  ;; Define the Chinese Farm as a significantly larger rectangle to the right of the blue line
+  ;; Define the Chinese Farm as a rectangle to the right of the blue line
   ask patches with [pxcor > 20 and pxcor <= 60 and pycor >= 20 and pycor <= 80] [
     set terrain-type "chinese-farm"
     set pcolor green
     set captured-by "none"
   ]
   set chinese-farm-patches patches with [terrain-type = "chinese-farm"]
-
-  ;; Define the center patch of the Chinese Farm
+  ;; Set the center of the Chinese Farm
   let center-x 40
   let center-y 50
   set chinese-farm-center patch center-x center-y
-
-  ;; Add one horizontal road spanning the entire width of the map
+  ;; Add roads
   ask patches with [pycor = 30 and pxcor > 20] [
     set terrain-type "road"
     set pcolor gray
   ]
-
-  ;; Add one vertical road spanning the entire height of the map
   ask patches with [pxcor = 40] [
     set terrain-type "road"
     set pcolor gray
@@ -94,8 +95,8 @@ to setup-terrain
 end
 
 to setup-units
-  ;; Israeli Tanks: 5 groups of 5 each => 25 tanks
-  repeat 5 [
+  ;; Israeli Tanks: 5 groups of 5 (total 25 tanks)
+  repeat 10 [
     let cluster-x (25 + random 15)
     let cluster-y (5 + random 5)
     create-israeli-tanks 5 [
@@ -109,8 +110,7 @@ to setup-units
     ]
     set group-counter group-counter + 1
   ]
-
-  ;; Egyptian Tanks: 5 groups of 5 each => 25 tanks
+  ;; Egyptian Tanks: 5 groups of 5 (total 25 tanks)
   repeat 5 [
     ;; Western border tanks
     let cluster-x-west 21
@@ -126,7 +126,6 @@ to setup-units
       set size 1.5
     ]
     set group-counter group-counter + 1
-
     ;; Southern border tanks
     let cluster-x-south (21 + random 39)
     let cluster-y-south 20
@@ -142,9 +141,8 @@ to setup-units
     ]
     set group-counter group-counter + 1
   ]
-
-  ;; Israeli Infantry: 5 groups of 5 each => 25 infantry
-  repeat 5 [
+  ;; Israeli Infantry: 5 groups of 5 (total 25 infantry)
+  repeat 10 [
     let cluster-x (25 + random 15)
     let cluster-y (5 + random 5)
     create-infantry 5 [
@@ -158,8 +156,7 @@ to setup-units
     ]
     set group-counter group-counter + 1
   ]
-
-  ;; Egyptian Infantry: 5 groups of 5 each => 25 infantry
+  ;; Egyptian Infantry: 5 groups of 5 (total 25 infantry)
   repeat 5 [
     ;; Western border infantry
     let cluster-x-west 21
@@ -175,7 +172,6 @@ to setup-units
       set size 1.5
     ]
     set group-counter group-counter + 1
-
     ;; Eastern border infantry
     let cluster-x-east 60
     let cluster-y-east (20 + random 60)
@@ -193,9 +189,9 @@ to setup-units
   ]
 end
 
-;; =========================================
-;; MAIN LOOP
-;; =========================================
+;------------------------------------------------
+; MAIN LOOP
+;------------------------------------------------
 to go
   ask israeli-tanks [ q-learn-move-israeli ]
   ask egyptian-tanks [ q-learn-move-egyptian ]
@@ -209,9 +205,9 @@ to go
   tick
 end
 
-;; =========================================
-;; Q-LEARNING FOR ISRAELI TANKS
-;; =========================================
+;------------------------------------------------
+; Q-LEARNING FOR ISRAELI UNITS
+;------------------------------------------------
 to q-learn-move-israeli
   let s (list xcor ycor)
   let a choose-action-israeli s
@@ -231,39 +227,40 @@ to q-learn-move-israeli
   update-q-table-israeli s a r s2
 end
 
-;; =========================================
-;; Q-LEARNING FOR EGYPTIAN TANKS
-;; =========================================
+;------------------------------------------------
+; Q-LEARNING FOR EGYPTIAN TANKS
+;------------------------------------------------
 to q-learn-move-egyptian
   if action = "hold-position" [
     if [terrain-type] of patch-here != "chinese-farm" [
       move-toward-chinese-farm
       stop
     ]
-    if not is-list? defense-center [ set defense-center (list xcor ycor) ]
-    ifelse any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm" ] in-radius 3 [
-      ;; In hold-position, simply face and take a small step toward the enemy
-      let nearest-enemy min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm" ] [ distance myself ]
-      if nearest-enemy != nobody [
-        face nearest-enemy
-        fd 0.5
-      ]
+    if (not is-list? defense-center) or (defense-center = 0) [
+      set defense-center (list xcor ycor)
+    ]
+    ifelse any? turtles with [ team = "israeli" ] in-radius 10 [
+      show (word "Egyptian tank " who " detected an Israeli unit!")
+      set action "surround"
+      execute-action "surround"
     ] [
       rt (random 20 - 10)
-      fd 0.3
-      if distancexy (item 0 defense-center) (item 1 defense-center) > 3 [
+      fd 0.5
+      if distancexy (item 0 defense-center) (item 1 defense-center) > 5 [
         face patch (item 0 defense-center) (item 1 defense-center)
-        bk 0.3
+        bk 0.5
       ]
     ]
-    stop
+    ; Do not stop so that Q-learning can continue.
+    ; stop
   ]
+
   let s (list xcor ycor)
   let a choose-action-egyptian s
   let oldx xcor
   let oldy ycor
   let nearby-israeli-tanks israeli-tanks in-radius 5
-  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 5
+  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 10
   if any? nearby-israeli-tanks or any? nearby-israeli-infantry [
     let nearest-enemy min-one-of (turtle-set nearby-israeli-tanks nearby-israeli-infantry) [ distance myself ]
     if nearest-enemy != nobody [
@@ -282,12 +279,16 @@ to q-learn-move-egyptian
   ]
   let kills 0
   ask israeli-tanks in-radius 2 [
-    die
-    set kills kills + 1
+    if random-float 1 < kill-prob [
+      die
+      set kills kills + 1
+    ]
   ]
   ask infantry with [team = "israeli"] in-radius 2 [
-    die
-    set kills kills + 1
+    if random-float 1 < kill-prob [
+      die
+      set kills kills + 1
+    ]
   ]
   let s2 (list xcor ycor)
   let r compute-reward s s2
@@ -298,15 +299,15 @@ to q-learn-move-egyptian
     ifelse any? turtles in-radius 5 with [ team != [ team ] of myself ] [
       set r r - 50
     ] [
-      set r r - 100
+      set r r - 500
     ]
   ]
   update-q-table-egyptian s a r s2
 end
 
-;; =========================================
-;; Q-LEARNING FOR ISRAELI INFANTRY
-;; =========================================
+;------------------------------------------------
+; Q-LEARNING FOR ISRAELI INFANTRY
+;------------------------------------------------
 to q-learn-move-israeli-infantry
   let s (list xcor ycor)
   let a choose-action-israeli s
@@ -319,37 +320,40 @@ to q-learn-move-israeli-infantry
     execute-action a
     if distance my-group-center > 5 [ setxy oldx oldy ]
   ]
-  ask infantry with [team = "egyrapian"] in-radius 2 [ die ]
+  ask infantry with [team = "israeli"] in-radius 5 [
+    if random-float 1 < kill-prob [ die ]
+  ]
   let s2 (list xcor ycor)
   let r compute-reward s s2
   update-q-table-israeli s a r s2
 end
 
-;; =========================================
-;; Q-LEARNING FOR EGYPTIAN INFANTRY
-;; =========================================
+;------------------------------------------------
+; Q-LEARNING FOR EGYPTIAN INFANTRY
+;------------------------------------------------
 to q-learn-move-egyptian-infantry
   if action = "hold-position" [
     if [terrain-type] of patch-here != "chinese-farm" [
       move-toward-chinese-farm
       stop
     ]
-    if not is-list? defense-center [ set defense-center (list xcor ycor) ]
-    ifelse any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm" ] in-radius 3 [
-      let nearest-enemy min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm" ] [ distance myself ]
-      if nearest-enemy != nobody [
-        face nearest-enemy
-        fd 0.3
-      ]
+    if (not is-list? defense-center) or (defense-center = 0) [
+      set defense-center (list xcor ycor)
+    ]
+    ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
+      show (word "Egyptian infantry " who " detected an Israeli unit!")
+      set action "surround"
+      execute-action "surround"
     ] [
       rt (random 20 - 10)
-      fd 0.3
-      if distancexy (item 0 defense-center) (item 1 defense-center) > 3 [
+      fd 0.5
+      if distancexy (item 0 defense-center) (item 1 defense-center) > 5 [
         face patch (item 0 defense-center) (item 1 defense-center)
-        bk 0.3
+        bk 0.5
       ]
     ]
-    stop
+    ; Do not stop so that Q-learning can continue.
+    ; stop
   ]
   let s (list xcor ycor)
   let a choose-action-egyptian s
@@ -363,13 +367,17 @@ to q-learn-move-egyptian-infantry
     if distance my-group-center > 5 [ setxy oldx oldy ]
   ]
   let kills 0
-  ask israeli-tanks in-radius 2 [
-    die
-    set kills kills + 1
+  ask israeli-tanks in-radius 5 [
+    if random-float 1 < kill-prob [
+      die
+      set kills kills + 1
+    ]
   ]
-  ask infantry with [team = "israeli"] in-radius 2 [
-    die
-    set kills kills + 1
+  ask infantry with [team = "israeli"] in-radius 5 [
+    if random-float 1 < kill-prob [
+      die
+      set kills kills + 1
+    ]
   ]
   let s2 (list xcor ycor)
   let r compute-reward s s2
@@ -380,15 +388,15 @@ to q-learn-move-egyptian-infantry
     ifelse any? turtles in-radius 5 with [ team != [team] of myself ] [
       set r r - 50
     ] [
-      set r r - 100
+      set r r - 500
     ]
   ]
   update-q-table-egyptian s a r s2
 end
 
-;; =========================================
-;; ACTION SELECTION
-;; =========================================
+;------------------------------------------------
+; ACTION SELECTION & Q-VALUE LOOKUPS
+;------------------------------------------------
 to-report choose-action-israeli [s]
   if (random-float 1 < epsilon) [
     report one-of ["move-north" "move-south" "move-east" "move-west"]
@@ -398,14 +406,14 @@ end
 
 to-report choose-action-egyptian [s]
   if (random-float 1 < epsilon) [
-    report one-of ["move-north" "move-south" "move-east" "move-west" "defend"]
+    report one-of ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
   ]
   report max-arg s "egyptian"
 end
 
 to-report max-arg [s side]
   if side = "egyptian" [
-    let actions ["move-north" "move-south" "move-east" "move-west" "defend"]
+    let actions ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
     let best-option first actions
     let best-value -99999
     foreach actions [ a ->
@@ -432,18 +440,15 @@ to-report max-arg [s side]
   report best-option
 end
 
-;; =========================================
-;; Q-VALUE LOOKUPS
-;; =========================================
 to-report q-value-israeli [s a]
   let entry filter [x -> (item 0 x = s and item 1 x = a)] q-table-israeli
-  if empty? entry [report 0]
+  if empty? entry [ report 0 ]
   report last first entry
 end
 
 to-report q-value-egyptian [s a]
   let entry filter [x -> (item 0 x = s and item 1 x = a)] q-table-egyptian
-  if empty? entry [report 0]
+  if empty? entry [ report 0 ]
   report last first entry
 end
 
@@ -452,9 +457,9 @@ to-report update-q-entry [table s a q-value]
   report lput (list s a q-value) new-table
 end
 
-;; =========================================
-;; MOVEMENT & REWARD
-;; =========================================
+;------------------------------------------------
+; MOVEMENT & REWARD
+;------------------------------------------------
 to execute-action [a]
   if a = "move-north" [ set heading 0   fd 1 ]
   if a = "move-south" [ set heading 180 fd 1 ]
@@ -465,6 +470,23 @@ to execute-action [a]
     if nearest-enemy != nobody [
       face nearest-enemy
       fd 1
+    ]
+  ]
+  if a = "surround" [
+    let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
+    if target != nobody [
+      let direct-angle towards target
+      let attack-range 2
+      let current-distance distance target
+      show (word "Egyptian " who " targeting Israeli " [who] of target " | distance: " current-distance)
+      ifelse current-distance <= attack-range [
+        face target
+        fd 2
+        if random-float 1 < kill-prob [ ask target [ die ] ]
+      ] [
+        face target
+        fd 2
+      ]
     ]
   ]
 end
@@ -515,15 +537,15 @@ end
 
 to update-q-table-egyptian [s a r s2]
   let max-q max map [x -> q-value-egyptian s2 x]
-               ["move-north" "move-south" "move-east" "move-west" "defend"]
+               ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
   let old-q q-value-egyptian s a
   let q-update ((1 - alpha) * old-q) + (alpha * (r + gamma * max-q))
   set q-table-egyptian update-q-entry q-table-egyptian s a q-update
 end
 
-;; =========================================
-;; GROUP COHESION
-;; =========================================
+;------------------------------------------------
+; GROUP COHESION & MISC.
+;------------------------------------------------
 to-report my-group-center
   let mates turtles with [group-id = [group-id] of myself]
   if any? mates [
@@ -539,38 +561,32 @@ to report-unit-counts
   show (word "Egyptian Units: " count turtles with [team = "egyptian"])
 end
 
-;; =========================================
-;; RANGED SHOOTING
-;; =========================================
 to check-shooting
   ask infantry [
     let targets infantry in-radius 3 with [team != [team] of myself]
+    if any? targets [
+      show (word "Infantry " who " is shooting enemy infantry!")
+    ]
     ask targets [
-      die
-      ask chinese-farm-patches with [captured-by = [team] of myself] [
-        set captured-by "none"
-        set pcolor green
-      ]
+      if random-float 1 < kill-prob [ die ]
     ]
   ]
   ask israeli-tanks [
     let targets turtles in-radius 5 with [team = "egyptian"]
+    if any? targets [
+      show (word "Israeli tank " who " is shooting Egyptian units!")
+    ]
     ask targets [
-      die
-      ask chinese-farm-patches with [captured-by = [team] of myself] [
-        set captured-by "none"
-        set pcolor green
-      ]
+      if random-float 1 < kill-prob [ die ]
     ]
   ]
   ask egyptian-tanks [
     let targets turtles in-radius 5 with [team = "israeli"]
+    if any? targets [
+      show (word "Egyptian tank " who " is shooting Israeli units!")
+    ]
     ask targets [
-      die
-      ask chinese-farm-patches with [captured-by = [team] of myself] [
-        set captured-by "none"
-        set pcolor green
-      ]
+      if random-float 1 < kill-prob [ die ]
     ]
   ]
 end
@@ -598,8 +614,8 @@ end
 
 to reinforce-chinese-farm
   ask egyptian-tanks with [[terrain-type] of patch-here = "chinese-farm"] [
-    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 5 [
-      let target min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] [ distance myself ]
+    if any? turtles with [ team = "israeli" ] in-radius 5 [
+      let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
       if target != nobody [
         face target
         fd 0.5
@@ -607,8 +623,8 @@ to reinforce-chinese-farm
     ]
   ]
   ask infantry with [ team = "egyptian" and [terrain-type] of patch-here = "chinese-farm"] [
-    if any? turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] in-radius 5 [
-      let target min-one-of turtles with [ team = "israeli" and [terrain-type] of patch-here = "chinese-farm"] [ distance myself ]
+    if any? turtles with [ team = "israeli" ] in-radius 5 [
+      let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
       if target != nobody [
         face target
         fd 0.5

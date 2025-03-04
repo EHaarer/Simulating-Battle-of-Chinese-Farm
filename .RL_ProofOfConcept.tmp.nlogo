@@ -96,7 +96,7 @@ end
 
 to setup-units
   ;; Israeli Tanks: 5 groups of 5 (total 25 tanks)
-  repeat 5 [
+  repeat 10 [
     let cluster-x (25 + random 15)
     let cluster-y (5 + random 5)
     create-israeli-tanks 5 [
@@ -111,7 +111,7 @@ to setup-units
     set group-counter group-counter + 1
   ]
   ;; Egyptian Tanks: 5 groups of 5 (total 25 tanks)
-  repeat  [
+  repeat 5 [
     ;; Western border tanks
     let cluster-x-west 21
     let cluster-y-west (20 + random 60)
@@ -239,44 +239,61 @@ to q-learn-move-egyptian
     if (not is-list? defense-center) or (defense-center = 0) [
       set defense-center (list xcor ycor)
     ]
-    ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
+    ifelse any? turtles with [ team = "israeli" ] in-radius 10 [
       show (word "Egyptian tank " who " detected an Israeli unit!")
       set action "surround"
-      execute-action "surround"
+      ; Don't execute the action here, let the main logic handle it
     ] [
       rt (random 20 - 10)
-      fd 0.3
-      if distancexy (item 0 defense-center) (item 1 defense-center) > 3 [
+      fd 0.5
+      if distancexy (item 0 defense-center) (item 1 defense-center) > 5 [
         face patch (item 0 defense-center) (item 1 defense-center)
-        bk 0.3
+        bk 0.5
       ]
+      stop  ; Add this to prevent moving twice in one tick
     ]
-    ; Do not stop so that Q-learning can continue.
-    ; stop
   ]
 
   let s (list xcor ycor)
   let a choose-action-egyptian s
   let oldx xcor
   let oldy ycor
-  let nearby-israeli-tanks israeli-tanks in-radius 5
-  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 5
-  if any? nearby-israeli-tanks or any? nearby-israeli-infantry [
+
+  ; Store original action value to restore it if we need to
+  let original-action action
+
+  let nearby-israeli-tanks israeli-tanks in-radius 8  ; Increased detection radius
+  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 12  ; Increased detection radius
+
+  ifelse any? nearby-israeli-tanks or any? nearby-israeli-infantry [
     let nearest-enemy min-one-of (turtle-set nearby-israeli-tanks nearby-israeli-infantry) [ distance myself ]
     if nearest-enemy != nobody [
-      face nearest-enemy
-      fd 1
+      set a "surround"  ; Force surround action when enemies are nearby
+      execute-action a
     ]
   ]
-  if not any? nearby-israeli-tanks and not any? nearby-israeli-infantry [
+  [
     ifelse [terrain-type] of patch-here != "chinese-farm" [
       move-toward-chinese-farm
     ]
     [
-      execute-action a
+      ; If we're in Chinese Farm and no enemies nearby, prefer "defend" action
+      ifelse random-float 1 < 0.7 [
+        execute-action "defend"
+      ]
+      [
+        execute-action a
+      ]
+      ; Ensure we don't wander too far from our group
       if distance my-group-center > 5 [ setxy oldx oldy ]
     ]
   ]
+
+  ; Restore original action if this was a hold-position unit
+  if original-action = "hold-position" [
+    set action original-action
+  ]
+
   let kills 0
   ask israeli-tanks in-radius 2 [
     if random-float 1 < kill-prob [
@@ -290,20 +307,25 @@ to q-learn-move-egyptian
       set kills kills + 1
     ]
   ]
+
   let s2 (list xcor ycor)
   let r compute-reward s s2
   set r (r + 50 * kills)
+
+  ; Penalize moving away from enemies
   let old-distance distancexy oldx oldy
   let new-distance distancexy xcor ycor
   if new-distance > old-distance [
     ifelse any? turtles in-radius 5 with [ team != [ team ] of myself ] [
       set r r - 50
     ] [
-      set r r - 100
+      set r r - 500
     ]
   ]
+
   update-q-table-egyptian s a r s2
 end
+
 
 ;------------------------------------------------
 ; Q-LEARNING FOR ISRAELI INFANTRY
@@ -320,7 +342,7 @@ to q-learn-move-israeli-infantry
     execute-action a
     if distance my-group-center > 5 [ setxy oldx oldy ]
   ]
-  ask infantry with [team = "israeli"] in-radius 2 [
+  ask infantry with [team = "israeli"] in-radius 5 [
     if random-float 1 < kill-prob [ die ]
   ]
   let s2 (list xcor ycor)
@@ -343,54 +365,87 @@ to q-learn-move-egyptian-infantry
     ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
       show (word "Egyptian infantry " who " detected an Israeli unit!")
       set action "surround"
-      execute-action "surround"
+      ; Don't execute the action here, let the main logic handle it
     ] [
       rt (random 20 - 10)
-      fd 0.3
-      if distancexy (item 0 defense-center) (item 1 defense-center) > 3 [
+      fd 0.5
+      if distancexy (item 0 defense-center) (item 1 defense-center) > 5 [
         face patch (item 0 defense-center) (item 1 defense-center)
-        bk 0.3
+        bk 0.5
       ]
+      stop  ; Add this to prevent moving twice in one tick
     ]
-    ; Do not stop so that Q-learning can continue.
-    ; stop
   ]
+
   let s (list xcor ycor)
   let a choose-action-egyptian s
   let oldx xcor
   let oldy ycor
-  ifelse [terrain-type] of patch-here != "chinese-farm" [
-    move-toward-chinese-farm
+
+  ; Store original action value to restore it if we need to
+  let original-action action
+
+  let nearby-israeli-tanks israeli-tanks in-radius 8  ; Increased detection radius
+  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 10  ; Increased detection radius
+
+  ifelse any? nearby-israeli-tanks or any? nearby-israeli-infantry [
+    let nearest-enemy min-one-of (turtle-set nearby-israeli-tanks nearby-israeli-infantry) [ distance myself ]
+    if nearest-enemy != nobody [
+      set a "surround"  ; Force surround action when enemies are nearby
+      execute-action a
+    ]
   ]
   [
-    execute-action a
-    if distance my-group-center > 5 [ setxy oldx oldy ]
+    ifelse [terrain-type] of patch-here != "chinese-farm" [
+      move-toward-chinese-farm
+    ]
+    [
+      ; If we're in Chinese Farm and no enemies nearby, prefer "defend" action
+      ifelse random-float 1 < 0.7 [
+        execute-action "defend"
+      ]
+      [
+        execute-action a
+      ]
+      ; Ensure we don't wander too far from our group
+      if distance my-group-center > 5 [ setxy oldx oldy ]
+    ]
   ]
+
+  ; Restore original action if this was a hold-position unit
+  if original-action = "hold-position" [
+    set action original-action
+  ]
+
   let kills 0
-  ask israeli-tanks in-radius 2 [
+  ask israeli-tanks in-radius 5 [
     if random-float 1 < kill-prob [
       die
       set kills kills + 1
     ]
   ]
-  ask infantry with [team = "israeli"] in-radius 2 [
+  ask infantry with [team = "israeli"] in-radius 5 [
     if random-float 1 < kill-prob [
       die
       set kills kills + 1
     ]
   ]
+
   let s2 (list xcor ycor)
   let r compute-reward s s2
   set r (r + 50 * kills)
+
+  ; Penalize moving away from enemies
   let old-distance distancexy oldx oldy
   let new-distance distancexy xcor ycor
   if new-distance > old-distance [
     ifelse any? turtles in-radius 5 with [ team != [team] of myself ] [
       set r r - 50
     ] [
-      set r r - 100
+      set r r - 500
     ]
   ]
+
   update-q-table-egyptian s a r s2
 end
 
@@ -460,36 +515,7 @@ end
 ;------------------------------------------------
 ; MOVEMENT & REWARD
 ;------------------------------------------------
-to execute-action [a]
-  if a = "move-north" [ set heading 0   fd 1 ]
-  if a = "move-south" [ set heading 180 fd 1 ]
-  if a = "move-east"  [ set heading 90  fd 1 ]
-  if a = "move-west"  [ set heading 270 fd 1 ]
-  if a = "defend" [
-    let nearest-enemy min-one-of turtles with [team = "israeli"] [ distance myself ]
-    if nearest-enemy != nobody [
-      face nearest-enemy
-      fd 1
-    ]
-  ]
-  if a = "surround" [
-    let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
-    if target != nobody [
-      let direct-angle towards target
-      let attack-range 2
-      let current-distance distance target
-      show (word "Egyptian " who " targeting Israeli " [who] of target " | distance: " current-distance)
-      ifelse current-distance <= attack-range [
-        face target
-        fd 2
-        if random-float 1 < kill-prob [ ask target [ die ] ]
-      ] [
-        face target
-        fd 2
-      ]
-    ]
-  ]
-end
+
 
 to move-toward-chinese-farm
   let target chinese-farm-center
