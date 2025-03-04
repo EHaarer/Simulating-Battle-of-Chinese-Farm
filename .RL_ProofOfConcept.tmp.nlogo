@@ -1,4 +1,637 @@
+globals [
+  battlefield-width
+  battlefield-height
 
+  ;; Two separate Q-tables:
+  ;;  - One for Israeli side
+  ;;  - One for Egyptian side
+  q-table-israeli
+  q-table-egyptian
+
+  ;; Learning parameters
+  alpha
+  gamma
+  epsilon
+
+  ;; Chance that a shooting event actually kills the target (0 to 1)
+  kill-prob
+
+  ;; Group IDs to keep track of which turtles spawn together
+  group-counter
+
+  ;; Patches that define the "Chinese Farm" area
+  chinese-farm-patches
+  chinese-farm-center
+]
+
+breed [israeli-tanks israeli-tank]
+breed [egyptian-tanks egyptian-tank]
+breed [infantry soldier]
+
+patches-own [
+  terrain-type
+  captured-by  ;; "israeli", "egyptian", or "none"
+]
+turtles-own [
+  state
+  action
+  team
+  group-id
+  defense-center  ;; Used for Egyptian defensive positioning
+]
+
+;------------------------------------------------
+; SETUP PROCEDURES
+;------------------------------------------------
+to setup
+  clear-all
+  set battlefield-width 100
+  set battlefield-height 100
+  resize-world 0 (battlefield-width - 1) 0 (battlefield-height - 1)
+  set-patch-size 5
+  set alpha 0.1
+  set gamma 0.9
+  set epsilon 0.5
+  set kill-prob 0.5
+  set q-table-israeli []
+  set q-table-egyptian []
+  set group-counter 0
+  set chinese-farm-patches []
+  setup-terrain
+  setup-units
+  reset-ticks
+end
+
+to setup-terrain
+  ;; Set the entire battlefield to desert
+  ask patches [
+    set terrain-type "desert-west"
+    set pcolor yellow
+  ]
+  ;; Add a vertical blue line (for visual reference)
+  ask patches with [pxcor <= 20 and pxcor >= 19] [
+    set pcolor blue
+  ]
+  ;; Define the Chinese Farm as a rectangle to the right of the blue line
+  ask patches with [pxcor > 20 and pxcor <= 60 and pycor >= 20 and pycor <= 80] [
+    set terrain-type "chinese-farm"
+    set pcolor green
+    set captured-by "none"
+  ]
+  set chinese-farm-patches patches with [terrain-type = "chinese-farm"]
+  ;; Set the center of the Chinese Farm
+  let center-x 40
+  let center-y 50
+  set chinese-farm-center patch center-x center-y
+  ;; Add roads
+  ask patches with [pycor = 30 and pxcor > 20] [
+    set terrain-type "road"
+    set pcolor gray
+  ]
+  ask patches with [pxcor = 40] [
+    set terrain-type "road"
+    set pcolor gray
+  ]
+end
+
+to setup-units
+  ;; Israeli Tanks: 5 groups of 5 (total 25 tanks)
+  repeat 5 [
+    let cluster-x (25 + random 15)
+    let cluster-y (5 + random 5)
+    create-israeli-tanks 5 [
+      set group-id group-counter
+      set team "israeli"
+      set shape "circle"
+      set color 135
+      setxy cluster-x cluster-y
+      set state (list xcor ycor)
+      set action ""
+    ]
+    set group-counter group-counter + 1
+  ]
+  ;; Egyptian Tanks: 5 groups of 5 (total 25 tanks)
+  repeat  [
+    ;; Western border tanks
+    let cluster-x-west 21
+    let cluster-y-west (20 + random 60)
+    create-egyptian-tanks 5 [
+      set group-id group-counter
+      set team "egyptian"
+      set shape "circle"
+      set color 25
+      setxy cluster-x-west cluster-y-west
+      set state (list xcor ycor)
+      set action "hold-position"
+      set size 1.5
+    ]
+    set group-counter group-counter + 1
+    ;; Southern border tanks
+    let cluster-x-south (21 + random 39)
+    let cluster-y-south 20
+    create-egyptian-tanks 5 [
+      set group-id group-counter
+      set team "egyptian"
+      set shape "circle"
+      set color 25
+      setxy cluster-x-south cluster-y-south
+      set state (list xcor ycor)
+      set action "hold-position"
+      set size 1.5
+    ]
+    set group-counter group-counter + 1
+  ]
+  ;; Israeli Infantry: 5 groups of 5 (total 25 infantry)
+  repeat 10 [
+    let cluster-x (25 + random 15)
+    let cluster-y (5 + random 5)
+    create-infantry 5 [
+      set group-id group-counter
+      set team "israeli"
+      set shape "person"
+      set color 0
+      setxy cluster-x cluster-y
+      set state (list xcor ycor)
+      set action ""
+    ]
+    set group-counter group-counter + 1
+  ]
+  ;; Egyptian Infantry: 5 groups of 5 (total 25 infantry)
+  repeat 5 [
+    ;; Western border infantry
+    let cluster-x-west 21
+    let cluster-y-west (20 + random 60)
+    create-infantry 5 [
+      set group-id group-counter
+      set team "egyptian"
+      set shape "person"
+      set color 15
+      setxy cluster-x-west cluster-y-west
+      set state (list xcor ycor)
+      set action "hold-position"
+      set size 1.5
+    ]
+    set group-counter group-counter + 1
+    ;; Eastern border infantry
+    let cluster-x-east 60
+    let cluster-y-east (20 + random 60)
+    create-infantry 5 [
+      set group-id group-counter
+      set team "egyptian"
+      set shape "person"
+      set color 15
+      setxy cluster-x-east cluster-y-east
+      set state (list xcor ycor)
+      set action "hold-position"
+      set size 1.5
+    ]
+    set group-counter group-counter + 1
+  ]
+end
+
+;------------------------------------------------
+; MAIN LOOP
+;------------------------------------------------
+to go
+  ask israeli-tanks [ q-learn-move-israeli ]
+  ask egyptian-tanks [ q-learn-move-egyptian ]
+  ask infantry with [team = "israeli"] [ q-learn-move-israeli-infantry ]
+  ask infantry with [team = "egyptian"] [ q-learn-move-egyptian-infantry ]
+  check-shooting
+  capture-chinese-farm
+  reinforce-chinese-farm
+  show (word "Israeli Units: " count turtles with [team = "israeli"])
+  show (word "Egyptian Units: " count turtles with [team = "egyptian"])
+  tick
+end
+
+;------------------------------------------------
+; Q-LEARNING FOR ISRAELI UNITS
+;------------------------------------------------
+to q-learn-move-israeli
+  let s (list xcor ycor)
+  let a choose-action-israeli s
+  let oldx xcor
+  let oldy ycor
+  ifelse [terrain-type] of patch-here != "chinese-farm" [
+    move-toward-chinese-farm
+  ]
+  [
+    execute-action a
+    if distance my-group-center > 5 [ setxy oldx oldy ]
+  ]
+  ask egyptian-tanks in-radius 2 [ die ]
+  ask infantry with [team = "egyptian"] in-radius 2 [ die ]
+  let s2 (list xcor ycor)
+  let r compute-reward s s2
+  update-q-table-israeli s a r s2
+end
+
+;------------------------------------------------
+; Q-LEARNING FOR EGYPTIAN TANKS
+;------------------------------------------------
+to q-learn-move-egyptian
+  if action = "hold-position" [
+    if [terrain-type] of patch-here != "chinese-farm" [
+      move-toward-chinese-farm
+      stop
+    ]
+    if (not is-list? defense-center) or (defense-center = 0) [
+      set defense-center (list xcor ycor)
+    ]
+    ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
+      show (word "Egyptian tank " who " detected an Israeli unit!")
+      set action "surround"
+      execute-action "surround"
+    ] [
+      rt (random 20 - 10)
+      fd 0.3
+      if distancexy (item 0 defense-center) (item 1 defense-center) > 3 [
+        face patch (item 0 defense-center) (item 1 defense-center)
+        bk 0.3
+      ]
+    ]
+    ; Do not stop so that Q-learning can continue.
+    ; stop
+  ]
+
+  let s (list xcor ycor)
+  let a choose-action-egyptian s
+  let oldx xcor
+  let oldy ycor
+  let nearby-israeli-tanks israeli-tanks in-radius 5
+  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 5
+  if any? nearby-israeli-tanks or any? nearby-israeli-infantry [
+    let nearest-enemy min-one-of (turtle-set nearby-israeli-tanks nearby-israeli-infantry) [ distance myself ]
+    if nearest-enemy != nobody [
+      face nearest-enemy
+      fd 1
+    ]
+  ]
+  if not any? nearby-israeli-tanks and not any? nearby-israeli-infantry [
+    ifelse [terrain-type] of patch-here != "chinese-farm" [
+      move-toward-chinese-farm
+    ]
+    [
+      execute-action a
+      if distance my-group-center > 5 [ setxy oldx oldy ]
+    ]
+  ]
+  let kills 0
+  ask israeli-tanks in-radius 2 [
+    if random-float 1 < kill-prob [
+      die
+      set kills kills + 1
+    ]
+  ]
+  ask infantry with [team = "israeli"] in-radius 2 [
+    if random-float 1 < kill-prob [
+      die
+      set kills kills + 1
+    ]
+  ]
+  let s2 (list xcor ycor)
+  let r compute-reward s s2
+  set r (r + 50 * kills)
+  let old-distance distancexy oldx oldy
+  let new-distance distancexy xcor ycor
+  if new-distance > old-distance [
+    ifelse any? turtles in-radius 5 with [ team != [ team ] of myself ] [
+      set r r - 50
+    ] [
+      set r r - 100
+    ]
+  ]
+  update-q-table-egyptian s a r s2
+end
+
+;------------------------------------------------
+; Q-LEARNING FOR ISRAELI INFANTRY
+;------------------------------------------------
+to q-learn-move-israeli-infantry
+  let s (list xcor ycor)
+  let a choose-action-israeli s
+  let oldx xcor
+  let oldy ycor
+  ifelse [terrain-type] of patch-here != "chinese-farm" [
+    move-toward-chinese-farm
+  ]
+  [
+    execute-action a
+    if distance my-group-center > 5 [ setxy oldx oldy ]
+  ]
+  ask infantry with [team = "israeli"] in-radius 2 [
+    if random-float 1 < kill-prob [ die ]
+  ]
+  let s2 (list xcor ycor)
+  let r compute-reward s s2
+  update-q-table-israeli s a r s2
+end
+
+;------------------------------------------------
+; Q-LEARNING FOR EGYPTIAN INFANTRY
+;------------------------------------------------
+to q-learn-move-egyptian-infantry
+  if action = "hold-position" [
+    if [terrain-type] of patch-here != "chinese-farm" [
+      move-toward-chinese-farm
+      stop
+    ]
+    if (not is-list? defense-center) or (defense-center = 0) [
+      set defense-center (list xcor ycor)
+    ]
+    ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
+      show (word "Egyptian infantry " who " detected an Israeli unit!")
+      set action "surround"
+      execute-action "surround"
+    ] [
+      rt (random 20 - 10)
+      fd 0.3
+      if distancexy (item 0 defense-center) (item 1 defense-center) > 3 [
+        face patch (item 0 defense-center) (item 1 defense-center)
+        bk 0.3
+      ]
+    ]
+    ; Do not stop so that Q-learning can continue.
+    ; stop
+  ]
+  let s (list xcor ycor)
+  let a choose-action-egyptian s
+  let oldx xcor
+  let oldy ycor
+  ifelse [terrain-type] of patch-here != "chinese-farm" [
+    move-toward-chinese-farm
+  ]
+  [
+    execute-action a
+    if distance my-group-center > 5 [ setxy oldx oldy ]
+  ]
+  let kills 0
+  ask israeli-tanks in-radius 2 [
+    if random-float 1 < kill-prob [
+      die
+      set kills kills + 1
+    ]
+  ]
+  ask infantry with [team = "israeli"] in-radius 2 [
+    if random-float 1 < kill-prob [
+      die
+      set kills kills + 1
+    ]
+  ]
+  let s2 (list xcor ycor)
+  let r compute-reward s s2
+  set r (r + 50 * kills)
+  let old-distance distancexy oldx oldy
+  let new-distance distancexy xcor ycor
+  if new-distance > old-distance [
+    ifelse any? turtles in-radius 5 with [ team != [team] of myself ] [
+      set r r - 50
+    ] [
+      set r r - 100
+    ]
+  ]
+  update-q-table-egyptian s a r s2
+end
+
+;------------------------------------------------
+; ACTION SELECTION & Q-VALUE LOOKUPS
+;------------------------------------------------
+to-report choose-action-israeli [s]
+  if (random-float 1 < epsilon) [
+    report one-of ["move-north" "move-south" "move-east" "move-west"]
+  ]
+  report max-arg s "israeli"
+end
+
+to-report choose-action-egyptian [s]
+  if (random-float 1 < epsilon) [
+    report one-of ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
+  ]
+  report max-arg s "egyptian"
+end
+
+to-report max-arg [s side]
+  if side = "egyptian" [
+    let actions ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
+    let best-option first actions
+    let best-value -99999
+    foreach actions [ a ->
+      let v (ifelse-value (side = "israeli")
+                [ q-value-israeli s a ]
+                [ q-value-egyptian s a ])
+      if v > best-value [
+        set best-option a
+        set best-value v
+      ]
+    ]
+    report best-option
+  ]
+  let actions ["move-north" "move-south" "move-east" "move-west"]
+  let best-option first actions
+  let best-value -99999
+  foreach actions [ a ->
+    let v q-value-israeli s a
+    if v > best-value [
+      set best-option a
+      set best-value v
+    ]
+  ]
+  report best-option
+end
+
+to-report q-value-israeli [s a]
+  let entry filter [x -> (item 0 x = s and item 1 x = a)] q-table-israeli
+  if empty? entry [ report 0 ]
+  report last first entry
+end
+
+to-report q-value-egyptian [s a]
+  let entry filter [x -> (item 0 x = s and item 1 x = a)] q-table-egyptian
+  if empty? entry [ report 0 ]
+  report last first entry
+end
+
+to-report update-q-entry [table s a q-value]
+  let new-table filter [row -> not (item 0 row = s and item 1 row = a)] table
+  report lput (list s a q-value) new-table
+end
+
+;------------------------------------------------
+; MOVEMENT & REWARD
+;------------------------------------------------
+to execute-action [a]
+  if a = "move-north" [ set heading 0   fd 1 ]
+  if a = "move-south" [ set heading 180 fd 1 ]
+  if a = "move-east"  [ set heading 90  fd 1 ]
+  if a = "move-west"  [ set heading 270 fd 1 ]
+  if a = "defend" [
+    let nearest-enemy min-one-of turtles with [team = "israeli"] [ distance myself ]
+    if nearest-enemy != nobody [
+      face nearest-enemy
+      fd 1
+    ]
+  ]
+  if a = "surround" [
+    let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
+    if target != nobody [
+      let direct-angle towards target
+      let attack-range 2
+      let current-distance distance target
+      show (word "Egyptian " who " targeting Israeli " [who] of target " | distance: " current-distance)
+      ifelse current-distance <= attack-range [
+        face target
+        fd 2
+        if random-float 1 < kill-prob [ ask target [ die ] ]
+      ] [
+        face target
+        fd 2
+      ]
+    ]
+  ]
+end
+
+to move-toward-chinese-farm
+  let target chinese-farm-center
+  let delta-x [pxcor] of target - xcor
+  let delta-y [pycor] of target - ycor
+  ifelse abs delta-x > abs delta-y [
+    if delta-x > 0 [ set heading 90  fd 1 ]
+    if delta-x < 0 [ set heading 270 fd 1 ]
+  ]
+  [
+    if delta-y > 0 [ set heading 0   fd 1 ]
+    if delta-y < 0 [ set heading 180 fd 1 ]
+  ]
+end
+
+to-report compute-reward [s s2]
+  let oldx item 0 s
+  let newx item 0 s2
+  let oldy item 1 s
+  let newy item 1 s2
+  let reward -1
+  if [terrain-type] of patch newx newy = "chinese-farm" and [captured-by] of patch newx newy != team [
+    set reward reward + 1000
+  ]
+  let target chinese-farm-center
+  let old-distance distancexy oldx oldy
+  let new-distance distancexy newx newy
+  if new-distance > old-distance [
+    ifelse any? turtles in-radius 5 with [ team != [ team ] of myself ] [
+      set reward reward - 50
+    ] [
+      set reward reward - 100
+    ]
+  ]
+  report reward
+end
+
+to update-q-table-israeli [s a r s2]
+  let max-q max map [x -> q-value-israeli s2 x]
+               ["move-north" "move-south" "move-east" "move-west"]
+  let old-q q-value-israeli s a
+  let q-update ((1 - alpha) * old-q) + (alpha * (r + gamma * max-q))
+  set q-table-israeli update-q-entry q-table-israeli s a q-update
+end
+
+to update-q-table-egyptian [s a r s2]
+  let max-q max map [x -> q-value-egyptian s2 x]
+               ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
+  let old-q q-value-egyptian s a
+  let q-update ((1 - alpha) * old-q) + (alpha * (r + gamma * max-q))
+  set q-table-egyptian update-q-entry q-table-egyptian s a q-update
+end
+
+;------------------------------------------------
+; GROUP COHESION & MISC.
+;------------------------------------------------
+to-report my-group-center
+  let mates turtles with [group-id = [group-id] of myself]
+  if any? mates [
+    let avg-x mean [xcor] of mates
+    let avg-y mean [ycor] of mates
+    report patch avg-x avg-y
+  ]
+  report patch-here
+end
+
+to report-unit-counts
+  show (word "Israeli Units: " count turtles with [team = "israeli"])
+  show (word "Egyptian Units: " count turtles with [team = "egyptian"])
+end
+
+to check-shooting
+  ask infantry [
+    let targets infantry in-radius 3 with [team != [team] of myself]
+    if any? targets [
+      show (word "Infantry " who " is shooting enemy infantry!")
+    ]
+    ask targets [
+      if random-float 1 < kill-prob [ die ]
+    ]
+  ]
+  ask israeli-tanks [
+    let targets turtles in-radius 5 with [team = "egyptian"]
+    if any? targets [
+      show (word "Israeli tank " who " is shooting Egyptian units!")
+    ]
+    ask targets [
+      if random-float 1 < kill-prob [ die ]
+    ]
+  ]
+  ask egyptian-tanks [
+    let targets turtles in-radius 5 with [team = "israeli"]
+    if any? targets [
+      show (word "Egyptian tank " who " is shooting Israeli units!")
+    ]
+    ask targets [
+      if random-float 1 < kill-prob [ die ]
+    ]
+  ]
+end
+
+to capture-chinese-farm
+  ask turtles [
+    if team = "israeli" [
+      ask patch-here [
+        if terrain-type = "chinese-farm" and captured-by != "israeli" [
+          set captured-by "israeli"
+          set pcolor blue
+        ]
+      ]
+    ]
+    if team = "egyptian" [
+      ask patch-here [
+        if terrain-type = "chinese-farm" and captured-by != "egyptian" [
+          set captured-by "egyptian"
+          set pcolor green
+        ]
+      ]
+    ]
+  ]
+end
+
+to reinforce-chinese-farm
+  ask egyptian-tanks with [[terrain-type] of patch-here = "chinese-farm"] [
+    if any? turtles with [ team = "israeli" ] in-radius 5 [
+      let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
+      if target != nobody [
+        face target
+        fd 0.5
+      ]
+    ]
+  ]
+  ask infantry with [ team = "egyptian" and [terrain-type] of patch-here = "chinese-farm"] [
+    if any? turtles with [ team = "israeli" ] in-radius 5 [
+      let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
+      if target != nobody [
+        face target
+        fd 0.5
+      ]
+    ]
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
