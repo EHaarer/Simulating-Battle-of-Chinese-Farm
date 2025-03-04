@@ -96,7 +96,7 @@ end
 
 to setup-units
   ;; Israeli Tanks: 5 groups of 5 (total 25 tanks)
-  repeat 10 [
+  repeat 5 [
     let cluster-x (25 + random 15)
     let cluster-y (5 + random 5)
     create-israeli-tanks 5 [
@@ -142,7 +142,7 @@ to setup-units
     set group-counter group-counter + 1
   ]
   ;; Israeli Infantry: 5 groups of 5 (total 25 infantry)
-  repeat 10 [
+  repeat 51 [
     let cluster-x (25 + random 15)
     let cluster-y (5 + random 5)
     create-infantry 5 [
@@ -213,24 +213,67 @@ to q-learn-move-israeli
   let a choose-action-israeli s
   let oldx xcor
   let oldy ycor
+
+  ; Check if unit is stuck (no movement for several ticks)
+  if (distancexy oldx oldy) < 0.1 and random-float 1 < 0.3 [
+    ; Force a random movement to break out of being stuck
+    set heading random 360
+    fd 1
+  ]
+
   ifelse [terrain-type] of patch-here != "chinese-farm" [
     move-toward-chinese-farm
   ]
   [
-    execute-action a
-    if distance my-group-center > 5 [ setxy oldx oldy ]
+    ; If we're in the Chinese Farm, check for nearby enemies
+    ifelse any? turtles with [team = "egyptian"] in-radius 3 [
+      ; If enemies nearby, engage them
+      let target min-one-of turtles with [team = "egyptian"] [distance myself]
+      if target != nobody [
+        face target
+        fd 1
+      ]
+    ]
+    [
+      ; If no enemies nearby, explore or capture territory
+      execute-action a
+
+      ; Try to prioritize movement to uncaptured areas
+      if [captured-by] of patch-here = "israeli" [
+        let uncaptured-nearby patches in-radius 5 with [terrain-type = "chinese-farm" and captured-by != "israeli"]
+        if any? uncaptured-nearby [
+          face min-one-of uncaptured-nearby [distance myself]
+          fd 1
+        ]
+      ]
+
+      if distance my-group-center > 5 [ setxy oldx oldy ]
+    ]
   ]
-  ask egyptian-tanks in-radius 2 [ die ]
-  ask infantry with [team = "egyptian"] in-radius 2 [ die ]
+
+  ; Attack nearby enemies
+  ask egyptian-tanks in-radius 2 [
+    if random-float 1 < kill-prob [ die ]
+  ]
+  ask infantry with [team = "egyptian"] in-radius 2 [
+    if random-float 1 < kill-prob [ die ]
+  ]
+
   let s2 (list xcor ycor)
   let r compute-reward s s2
+
+  ; Bonus reward for capturing new territory
+  if [terrain-type] of patch-here = "chinese-farm" and [captured-by] of patch-here != "israeli" [
+    set r r + 500
+  ]
+
   update-q-table-israeli s a r s2
 end
-
 ;------------------------------------------------
 ; Q-LEARNING FOR EGYPTIAN TANKS
 ;------------------------------------------------
 to q-learn-move-egyptian
+  ; Modified to make units less likely to get stuck
   if action = "hold-position" [
     if [terrain-type] of patch-here != "chinese-farm" [
       move-toward-chinese-farm
@@ -241,16 +284,36 @@ to q-learn-move-egyptian
     ]
     ifelse any? turtles with [ team = "israeli" ] in-radius 10 [
       show (word "Egyptian tank " who " detected an Israeli unit!")
-      set action "surround"
-      ; Don't execute the action here, let the main logic handle it
+      set action "surround"  ; Change action mode to allow movement
     ] [
-      rt (random 20 - 10)
-      fd 0.5
-      if distancexy (item 0 defense-center) (item 1 defense-center) > 5 [
-        face patch (item 0 defense-center) (item 1 defense-center)
-        bk 0.5
+      ; Look for captured areas to reclaim - MODIFIED FOR BETTER MOVEMENT
+      let israeli-captured-nearby patches in-radius 12 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
+      ifelse any? israeli-captured-nearby [
+        show (word "Egyptian tank " who " moving to recapture territory!")
+        face min-one-of israeli-captured-nearby [distance myself]
+        fd 1.5  ; Increased movement speed
+
+        ; Break out of hold position if we're trying to recapture
+        if random-float 1 < 0.3 [  ; 30% chance to switch to active recapture
+          set action "surround"
+        ]
+      ] [
+        ; Random movement to avoid getting stuck
+        ifelse random-float 1 < 0.7 [
+          ; Stay near defense position most of the time
+          rt (random 40 - 20)
+          fd 0.75  ; Increased from 0.5
+          if distancexy (item 0 defense-center) (item 1 defense-center) > 7 [  ; Increased radius
+            face patch (item 0 defense-center) (item 1 defense-center)
+            fd 1  ; More decisive movement back to position
+          ]
+        ] [
+          ; Sometimes explore further
+          rt (random 90 - 45)
+          fd 1.5
+        ]
       ]
-      stop  ; Add this to prevent moving twice in one tick
+      stop
     ]
   ]
 
@@ -262,35 +325,66 @@ to q-learn-move-egyptian
   ; Store original action value to restore it if we need to
   let original-action action
 
-  let nearby-israeli-tanks israeli-tanks in-radius 8  ; Increased detection radius
-  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 12  ; Increased detection radius
+  let nearby-israeli-tanks israeli-tanks in-radius 10  ; Increased radius
+  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 15  ; Increased radius
 
+  ; First priority: Find Israeli forces to engage
   ifelse any? nearby-israeli-tanks or any? nearby-israeli-infantry [
     let nearest-enemy min-one-of (turtle-set nearby-israeli-tanks nearby-israeli-infantry) [ distance myself ]
     if nearest-enemy != nobody [
-      set a "surround"  ; Force surround action when enemies are nearby
-      execute-action a
+      set a "surround"
+      face nearest-enemy
+      fd 1.25  ; Increased movement speed
     ]
   ]
   [
-    ifelse [terrain-type] of patch-here != "chinese-farm" [
-      move-toward-chinese-farm
+    ; Second priority: Recapture lost territory - MODIFIED FOR BETTER MOVEMENT
+    let israeli-captured patches in-radius 15 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
+    ifelse any? israeli-captured [
+      face min-one-of israeli-captured [distance myself]
+      fd 2  ; Increased from 1.5 for more decisive movement
+
+      ; Claim territory we're standing on
+      if [terrain-type] of patch-here = "chinese-farm" [
+        ask patch-here [
+          set captured-by "egyptian"
+          set pcolor green
+        ]
+      ]
     ]
     [
-      ; If we're in Chinese Farm and no enemies nearby, prefer "defend" action
-      ifelse random-float 1 < 0.7 [
-        execute-action "defend"
+      ; Third priority: Regular movement
+      ifelse [terrain-type] of patch-here != "chinese-farm" [
+        move-toward-chinese-farm
       ]
       [
-        execute-action a
+        ; If we're in Chinese Farm and no enemies nearby, mix defend and exploration
+        ifelse random-float 1 < 0.6 [  ; Reduced from 0.7
+          execute-action "defend"
+        ]
+        [
+          ; Increased chance of exploratory movement
+          execute-action a
+
+          ; Add some randomness to break out of stuck patterns
+          if random-float 1 < 0.15 [  ; 15% chance for random movement
+            rt (random 180 - 90)
+            fd 1.5
+          ]
+        ]
+
+        ; Relaxed group cohesion constraint - IMPORTANT FIX
+        if distance my-group-center > 8 [  ; Increased from 5
+          ; Don't teleport back anymore, just move toward group
+          face my-group-center
+          fd 1
+        ]
       ]
-      ; Ensure we don't wander too far from our group
-      if distance my-group-center > 5 [ setxy oldx oldy ]
     ]
   ]
 
-  ; Restore original action if this was a hold-position unit
-  if original-action = "hold-position" [
+  ; Restore original action if this was a hold-position unit, but with chance to break free
+  if original-action = "hold-position" and random-float 1 < 0.85 [  ; 15% chance to escape hold position
     set action original-action
   ]
 
@@ -310,21 +404,16 @@ to q-learn-move-egyptian
 
   let s2 (list xcor ycor)
   let r compute-reward s s2
-  set r (r + 50 * kills)
 
-  ; Penalize moving away from enemies
-  let old-distance distancexy oldx oldy
-  let new-distance distancexy xcor ycor
-  if new-distance > old-distance [
-    ifelse any? turtles in-radius 5 with [ team != [ team ] of myself ] [
-      set r r - 50
-    ] [
-      set r r - 500
-    ]
+  ; Extra reward for kills and recapturing territory
+  set r (r + 50 * kills)
+  if [terrain-type] of patch-here = "chinese-farm" and [captured-by] of patch-here = "israeli" [
+    set r r + 500  ; Increased from 300 for stronger reinforcement
   ]
 
   update-q-table-egyptian s a r s2
 end
+
 
 
 ;------------------------------------------------
@@ -354,6 +443,7 @@ end
 ; Q-LEARNING FOR EGYPTIAN INFANTRY
 ;------------------------------------------------
 to q-learn-move-egyptian-infantry
+  ; Similar modifications as for tanks
   if action = "hold-position" [
     if [terrain-type] of patch-here != "chinese-farm" [
       move-toward-chinese-farm
@@ -362,18 +452,31 @@ to q-learn-move-egyptian-infantry
     if (not is-list? defense-center) or (defense-center = 0) [
       set defense-center (list xcor ycor)
     ]
-    ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
+    ifelse any? turtles with [ team = "israeli" ] in-radius 7 [  ; Increased from 5
       show (word "Egyptian infantry " who " detected an Israeli unit!")
       set action "surround"
-      ; Don't execute the action here, let the main logic handle it
     ] [
-      rt (random 20 - 10)
-      fd 0.5
-      if distancexy (item 0 defense-center) (item 1 defense-center) > 5 [
-        face patch (item 0 defense-center) (item 1 defense-center)
-        bk 0.5
+      ; Look for captured areas to reclaim - MODIFIED FOR BETTER MOVEMENT
+      let israeli-captured-nearby patches in-radius 10 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
+      ifelse any? israeli-captured-nearby [
+        show (word "Egyptian infantry " who " moving to recapture territory!")
+        face min-one-of israeli-captured-nearby [distance myself]
+        fd 1.25  ; Increased from 1
+
+        ; Break out of hold position if we're trying to recapture
+        if random-float 1 < 0.3 [  ; 30% chance to switch to active recapture
+          set action "surround"
+        ]
+      ] [
+        ; Random movement to avoid getting stuck
+        rt (random 40 - 20)
+        fd 0.75  ; Increased from 0.5
+        if distancexy (item 0 defense-center) (item 1 defense-center) > 7 [
+          face patch (item 0 defense-center) (item 1 defense-center)
+          fd 1
+        ]
       ]
-      stop  ; Add this to prevent moving twice in one tick
+      stop
     ]
   ]
 
@@ -385,46 +488,77 @@ to q-learn-move-egyptian-infantry
   ; Store original action value to restore it if we need to
   let original-action action
 
-  let nearby-israeli-tanks israeli-tanks in-radius 8  ; Increased detection radius
-  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 10  ; Increased detection radius
+  let nearby-israeli-tanks israeli-tanks in-radius 10  ; Increased radius
+  let nearby-israeli-infantry infantry with [team = "israeli"] in-radius 12  ; Increased radius
 
+  ; First priority: Engage enemy forces
   ifelse any? nearby-israeli-tanks or any? nearby-israeli-infantry [
     let nearest-enemy min-one-of (turtle-set nearby-israeli-tanks nearby-israeli-infantry) [ distance myself ]
     if nearest-enemy != nobody [
-      set a "surround"  ; Force surround action when enemies are nearby
-      execute-action a
+      set a "surround"
+      face nearest-enemy
+      fd 1.25  ; Increased speed
     ]
   ]
   [
-    ifelse [terrain-type] of patch-here != "chinese-farm" [
-      move-toward-chinese-farm
+    ; Second priority: Recapture territory - MODIFIED FOR BETTER MOVEMENT
+    let israeli-captured patches in-radius 12 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
+    ifelse any? israeli-captured [
+      face min-one-of israeli-captured [distance myself]
+      fd 1.5  ; Increased from 1
+
+      ; Claim territory we're standing on
+      if [terrain-type] of patch-here = "chinese-farm" [
+        ask patch-here [
+          set captured-by "egyptian"
+          set pcolor green
+        ]
+      ]
     ]
     [
-      ; If we're in Chinese Farm and no enemies nearby, prefer "defend" action
-      ifelse random-float 1 < 0.7 [
-        execute-action "defend"
+      ; Third priority: Regular movement
+      ifelse [terrain-type] of patch-here != "chinese-farm" [
+        move-toward-chinese-farm
       ]
       [
-        execute-action a
+        ; If we're in Chinese Farm and no enemies nearby, mix defend and exploration
+        ifelse random-float 1 < 0.6 [  ; Reduced from 0.7
+          execute-action "defend"
+        ]
+        [
+          ; Increased chance of exploratory movement
+          execute-action a
+
+          ; Add some randomness to break out of stuck patterns
+          if random-float 1 < 0.15 [  ; 15% chance for random movement
+            rt (random 180 - 90)
+            fd 1.5
+          ]
+        ]
+
+        ; Relaxed group cohesion constraint - IMPORTANT FIX
+        if distance my-group-center > 8 [  ; Increased from 5
+          ; Don't teleport back anymore, just move toward group
+          face my-group-center
+          fd 1
+        ]
       ]
-      ; Ensure we don't wander too far from our group
-      if distance my-group-center > 5 [ setxy oldx oldy ]
     ]
   ]
 
-  ; Restore original action if this was a hold-position unit
-  if original-action = "hold-position" [
+  ; Restore original action if this was a hold-position unit, but with chance to break free
+  if original-action = "hold-position" and random-float 1 < 0.85 [  ; 15% chance to escape hold position
     set action original-action
   ]
 
   let kills 0
-  ask israeli-tanks in-radius 5 [
+  ask israeli-tanks in-radius 3 [  ; Increased range
     if random-float 1 < kill-prob [
       die
       set kills kills + 1
     ]
   ]
-  ask infantry with [team = "israeli"] in-radius 5 [
+  ask infantry with [team = "israeli"] in-radius 3 [  ; Increased range
     if random-float 1 < kill-prob [
       die
       set kills kills + 1
@@ -433,21 +567,16 @@ to q-learn-move-egyptian-infantry
 
   let s2 (list xcor ycor)
   let r compute-reward s s2
-  set r (r + 50 * kills)
 
-  ; Penalize moving away from enemies
-  let old-distance distancexy oldx oldy
-  let new-distance distancexy xcor ycor
-  if new-distance > old-distance [
-    ifelse any? turtles in-radius 5 with [ team != [team] of myself ] [
-      set r r - 50
-    ] [
-      set r r - 500
-    ]
+  ; Extra reward for kills and recapturing territory
+  set r (r + 50 * kills)
+  if [terrain-type] of patch-here = "chinese-farm" and [captured-by] of patch-here = "israeli" [
+    set r r + 350  ; Increased from 200 for stronger reinforcement
   ]
 
   update-q-table-egyptian s a r s2
 end
+
 
 ;------------------------------------------------
 ; ACTION SELECTION & Q-VALUE LOOKUPS
@@ -515,7 +644,55 @@ end
 ;------------------------------------------------
 ; MOVEMENT & REWARD
 ;------------------------------------------------
+to execute-action [a]
+  if a = "move-north" [ set heading 0   fd 1 ]
+  if a = "move-south" [ set heading 180 fd 1 ]
+  if a = "move-east"  [ set heading 90  fd 1 ]
+  if a = "move-west"  [ set heading 270 fd 1 ]
+  if a = "defend" [
+    ; Modified to make units stay in place more
+    let nearest-enemy min-one-of turtles with [team = "israeli"] [ distance myself ]
+    if nearest-enemy != nobody [
+      face nearest-enemy
+      ; Only move forward if enemy is close
+      if distance nearest-enemy < 3 [
+        fd 1
+      ]
+    ]
+  ]
+  if a = "surround" [
+  let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
+  ifelse target != nobody [
+  let direct-angle towards target
+  let attack-range 2
+  let current-distance distance target
 
+  ; Modified to improve surrounding behavior
+  ifelse current-distance <= attack-range [
+    ; We're close enough to attack
+    face target
+    fd 1
+    if random-float 1 < kill-prob [ ask target [ die ] ]
+  ] [
+    ; We're far, approach but try to flank
+    ; Add some randomness to the approach angle for better surrounding
+    set heading (towards target + (random 60 - 30))
+    fd 1.5
+  ]
+] [
+  ; No target found, look for Israeli-captured territory instead
+  let israeli-captured patches in-radius 15 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
+  ifelse any? israeli-captured [
+    face min-one-of israeli-captured [distance myself]
+    fd 1.5
+  ] [
+    ; Just move randomly to avoid getting stuck
+    rt random 90 - 45
+    fd 1
+  ]
+]
+  ]
+end
 
 to move-toward-chinese-farm
   let target chinese-farm-center
@@ -537,21 +714,61 @@ to-report compute-reward [s s2]
   let oldy item 1 s
   let newy item 1 s2
   let reward -1
-  if [terrain-type] of patch newx newy = "chinese-farm" and [captured-by] of patch newx newy != team [
-    set reward reward + 1000
+
+  ; Enhanced rewards for territory control
+  if [terrain-type] of patch newx newy = "chinese-farm" [
+    ifelse team = "israeli" [
+      if [captured-by] of patch newx newy != "israeli" [
+        set reward reward + 1000  ; Big reward for capturing new territory
+      ]
+    ]
+    [
+      ; Egyptian forces
+      ifelse [captured-by] of patch newx newy = "israeli" [
+        set reward reward + 1500  ; Even bigger reward for recapturing from Israelis
+      ]
+      [
+        if [captured-by] of patch newx newy != "egyptian" [
+          set reward reward + 1000  ; Regular reward for new territory
+        ]
+      ]
+    ]
   ]
+
   let target chinese-farm-center
   let old-distance distancexy oldx oldy
   let new-distance distancexy newx newy
+
+  ; Movement penalties are team-specific now
   if new-distance > old-distance [
-    ifelse any? turtles in-radius 5 with [ team != [ team ] of myself ] [
-      set reward reward - 50
-    ] [
-      set reward reward - 100
+    ifelse team = "israeli" [
+      ; Israeli forces are penalized for moving away from the center
+      ifelse any? turtles in-radius 5 with [ team != [ team ] of myself ] [
+        set reward reward - 50
+      ]
+      [
+        set reward reward - 100
+      ]
+    ]
+    [
+      ; Egyptian forces are penalized for moving away from Israeli forces or captured territory
+      ifelse any? turtles in-radius 5 with [ team = "israeli" ] [
+        set reward reward - 50
+      ]
+      [
+        ifelse any? patches in-radius 10 with [terrain-type = "chinese-farm" and captured-by = "israeli"] [
+          set reward reward - 300  ; Big penalty for moving away from capturable territory
+        ]
+        [
+          set reward reward - 100
+        ]
+      ]
     ]
   ]
+
   report reward
 end
+
 
 to update-q-table-israeli [s a r s2]
   let max-q max map [x -> q-value-israeli s2 x]
@@ -629,34 +846,72 @@ to capture-chinese-farm
     ]
     if team = "egyptian" [
       ask patch-here [
-        if terrain-type = "chinese-farm" and captured-by != "egyptian" [
+        if terrain-type = "chinese-farm" [
           set captured-by "egyptian"
           set pcolor green
         ]
       ]
     ]
   ]
+
+  ; Visual indicator of control percentages
+  let total-chinese-farm count chinese-farm-patches
+  let egyptian-control count chinese-farm-patches with [captured-by = "egyptian"]
+  let israeli-control count chinese-farm-patches with [captured-by = "israeli"]
+  let egyptian-percent (egyptian-control / total-chinese-farm) * 100
+  let israeli-percent (israeli-control / total-chinese-farm) * 100
+
+  show (word "Control: Egyptian " precision egyptian-percent 1 "%, Israeli " precision israeli-percent 1 "%")
 end
 
 to reinforce-chinese-farm
+  ; Modified to make Egyptian units more aggressive about recapturing
   ask egyptian-tanks with [[terrain-type] of patch-here = "chinese-farm"] [
-    if any? turtles with [ team = "israeli" ] in-radius 5 [
-      let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
-      if target != nobody [
-        face target
-        fd 0.5
+  ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
+    let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
+    if target != nobody [
+      face target
+      fd 1  ; Increased from 0.5
+    ]
+  ] [
+    ; If no immediate threats, look for Israeli-captured areas
+    let israeli-patches patches in-radius 15 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
+    ifelse any? israeli-patches [
+      face min-one-of israeli-patches [distance myself]
+      fd 1.5  ; Increased from 0.5
+    ] [
+      ; Random movement to avoid getting stuck
+      if random-float 1 < 0.2 [  ; 20% chance to move randomly
+        rt random 90 - 45
+        fd 1
       ]
     ]
   ]
+]
+
   ask infantry with [ team = "egyptian" and [terrain-type] of patch-here = "chinese-farm"] [
-    if any? turtles with [ team = "israeli" ] in-radius 5 [
-      let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
-      if target != nobody [
-        face target
-        fd 0.5
+  ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
+    let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
+    if target != nobody [
+      face target
+      fd 1  ; Increased from 0.5
+    ]
+  ]
+  [
+    ; If no immediate threats, look for Israeli-captured areas
+    let israeli-patches patches in-radius 10 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
+    ifelse any? israeli-patches [
+      face min-one-of israeli-patches [distance myself]
+      fd 1.25  ; Increased from 0.5
+    ] [
+      ; Random movement to avoid getting stuck
+      if random-float 1 < 0.2 [  ; 20% chance to move randomly
+        rt random 90 - 45
+        fd 1
       ]
     ]
   ]
+]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
