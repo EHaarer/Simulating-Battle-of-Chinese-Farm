@@ -96,7 +96,7 @@ end
 
 to setup-units
   ;; Israeli Tanks: 5 groups of 5 (total 25 tanks)
-  repeat 5 [
+  repeat 10 [
     let cluster-x (25 + random 15)
     let cluster-y (5 + random 5)
     create-israeli-tanks 5 [
@@ -142,7 +142,7 @@ to setup-units
     set group-counter group-counter + 1
   ]
   ;; Israeli Infantry: 5 groups of 5 (total 25 infantry)
-  repeat 51 [
+  repeat 10 [
     let cluster-x (25 + random 15)
     let cluster-y (5 + random 5)
     create-infantry 5 [
@@ -840,7 +840,7 @@ to capture-chinese-farm
       ask patch-here [
         if terrain-type = "chinese-farm" and captured-by != "israeli" [
           set captured-by "israeli"
-          set pcolor blue
+          set pcolor brown
         ]
       ]
     ]
@@ -913,6 +913,8 @@ to reinforce-chinese-farm
   ]
 ]
 end
+
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
