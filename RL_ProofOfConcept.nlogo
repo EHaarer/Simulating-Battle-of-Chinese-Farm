@@ -66,9 +66,120 @@ to setup
   set chinese-farm-patches []
   set strategic-locations []
   setup-terrain
-  setup-strategic-locations ;; NEW
+  setup-strategic-locations
+  setup-egyptian-troops-on-strategic  ;; If you want Egyptian forces on strategic locations
   setup-units
+  setup-israeli-attackers-southeast    ;; Spawn Israeli attackers in the southeast
   reset-ticks
+end
+
+
+to setup-egyptian-troops-on-strategic
+  ;; Strategic Location 1: (30,65)
+  create-egyptian-tanks 10 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "circle"
+    set color 25
+    setxy 30 65
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+  create-infantry 10 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "person"
+    set color 15
+    setxy 30 65
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+
+  ;; Strategic Location 2: (40,40)
+  create-egyptian-tanks 10 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "circle"
+    set color 25
+    setxy 40 40
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+  create-infantry 10 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "person"
+    set color 15
+    setxy 40 40
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+
+  ;; Strategic Location 3: (50,25)
+  create-egyptian-tanks 10 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "circle"
+    set color 25
+    setxy 50 25
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+  create-infantry 10 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "person"
+    set color 15
+    setxy 50 25
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+end
+
+to setup-israeli-attackers-southeast
+  ;; Israeli Attackers: Tanks in the southeast region
+  repeat 5 [
+    let cluster-x (70 + random 10)  ;; x between 80 and 89
+    let cluster-y (20 + random 20)     ;; y between 0 and 19
+    create-israeli-tanks 5 [
+      set group-id group-counter
+      set team "israeli"
+      set shape "circle"
+      set color 135
+      setxy cluster-x cluster-y
+      set state (list xcor ycor)
+      set action ""
+    ]
+    set group-counter group-counter + 1
+  ]
+
+  ;; Israeli Attackers: Infantry in the southeast region
+  repeat 5 [
+    let cluster-x (70 + random 10)
+    let cluster-y (20 + random 20)
+    create-infantry 5 [
+      set group-id group-counter
+      set team "israeli"
+      set shape "person"
+      set color 0
+      setxy cluster-x cluster-y
+      set state (list xcor ycor)
+      set action ""
+    ]
+    set group-counter group-counter + 1
+  ]
 end
 
 to setup-terrain
@@ -1179,7 +1290,7 @@ to check-win-condition
     let strategic-israeli count patches with [is-strategic and captured-by = "israeli"]
 
     ; Calculate weighted territory control (strategic locations count double)
-    let strategic-weight 3  ; Strategic locations are worth 3x normal patches
+    let strategic-weight 5  ; Strategic locations are worth 3x normal patches
     let weighted-egyptian (egyptian-control - strategic-egyptian) + (strategic-egyptian * strategic-weight)
     let weighted-israeli (israeli-control - strategic-israeli) + (strategic-israeli * strategic-weight)
     let weighted-total (total-chinese-farm - strategic-total) + (strategic-total * strategic-weight)
