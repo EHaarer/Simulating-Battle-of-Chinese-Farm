@@ -96,7 +96,7 @@ end
 
 to setup-units
   ;; Israeli Tanks: 5 groups of 5 (total 25 tanks)
-  repeat 10 [
+  repeat  [
     let cluster-x (25 + random 15)
     let cluster-y (5 + random 5)
     create-israeli-tanks 5 [
@@ -142,7 +142,7 @@ to setup-units
     set group-counter group-counter + 1
   ]
   ;; Israeli Infantry: 5 groups of 5 (total 25 infantry)
-  repeat 10 [
+  repeat 5 [
     let cluster-x (25 + random 15)
     let cluster-y (5 + random 5)
     create-infantry 5 [
@@ -200,6 +200,7 @@ to go
   check-shooting
   capture-chinese-farm
   reinforce-chinese-farm
+  check-win-condition
   show (word "Israeli Units: " count turtles with [team = "israeli"])
   show (word "Egyptian Units: " count turtles with [team = "egyptian"])
   tick
@@ -915,6 +916,46 @@ to reinforce-chinese-farm
 end
 
 
+to check-win-condition
+  ; Count troops on each side
+  let israeli-count count turtles with [team = "israeli"]
+  let egyptian-count count turtles with [team = "egyptian"]
+
+  ; Check if either side has fewer than 10 troops
+  if israeli-count < 10 or egyptian-count < 10 [
+    ; Count captured territory
+    let total-chinese-farm count chinese-farm-patches
+    let egyptian-control count chinese-farm-patches with [captured-by = "egyptian"]
+    let israeli-control count chinese-farm-patches with [captured-by = "israeli"]
+
+    ; Calculate percentages
+    let egyptian-percent (egyptian-control / total-chinese-farm) * 100
+    let israeli-percent (israeli-control / total-chinese-farm) * 100
+
+    ; Determine the winner based on territory
+    ifelse israeli-percent > egyptian-percent [
+      show "ISRAELI VICTORY!"
+      show (word "Final control: Israeli " precision israeli-percent 1 "%, Egyptian " precision egyptian-percent 1 "%")
+      show (word "Final troop count: Israeli " israeli-count ", Egyptian " egyptian-count)
+    ] [
+      ifelse egyptian-percent > israeli-percent [
+        show "EGYPTIAN VICTORY!"
+        show (word "Final control: Egyptian " precision egyptian-percent 1 "%, Israeli " precision israeli-percent 1 "%")
+        show (word "Final troop count: Egyptian " egyptian-count ", Israeli " israeli-count)
+      ] [
+        show "DRAW - EQUAL TERRITORIAL CONTROL"
+        show (word "Final control: Both sides " precision israeli-percent 1 "%")
+        show (word "Final troop count: Israeli " israeli-count ", Egyptian " egyptian-count)
+      ]
+    ]
+
+    ; Show message and stop the simulation
+    user-message (word "Simulation ended. "
+                  ifelse-value (israeli-percent > egyptian-percent) ["Israeli victory!"]
+                  [ifelse-value (egyptian-percent > israeli-percent) ["Egyptian victory!"] ["Draw!"]])
+    stop
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
