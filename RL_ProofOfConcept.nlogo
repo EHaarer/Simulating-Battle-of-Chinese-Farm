@@ -76,7 +76,7 @@ end
 
 to setup-egyptian-troops-on-strategic
   ;; Strategic Location 1: (30,65)
-  create-egyptian-tanks 10 [
+  create-egyptian-tanks 20 [
     set group-id group-counter
     set team "egyptian"
     set shape "circle"
@@ -87,7 +87,7 @@ to setup-egyptian-troops-on-strategic
     set size 1.5
   ]
   set group-counter group-counter + 1
-  create-infantry 10 [
+  create-infantry 20 [
     set group-id group-counter
     set team "egyptian"
     set shape "person"
@@ -100,7 +100,7 @@ to setup-egyptian-troops-on-strategic
   set group-counter group-counter + 1
 
   ;; Strategic Location 2: (40,40)
-  create-egyptian-tanks 10 [
+  create-egyptian-tanks 20 [
     set group-id group-counter
     set team "egyptian"
     set shape "circle"
@@ -111,7 +111,7 @@ to setup-egyptian-troops-on-strategic
     set size 1.5
   ]
   set group-counter group-counter + 1
-  create-infantry 10 [
+  create-infantry 20 [
     set group-id group-counter
     set team "egyptian"
     set shape "person"
@@ -124,7 +124,7 @@ to setup-egyptian-troops-on-strategic
   set group-counter group-counter + 1
 
   ;; Strategic Location 3: (50,25)
-  create-egyptian-tanks 10 [
+  create-egyptian-tanks 20 [
     set group-id group-counter
     set team "egyptian"
     set shape "circle"
@@ -135,7 +135,7 @@ to setup-egyptian-troops-on-strategic
     set size 1.5
   ]
   set group-counter group-counter + 1
-  create-infantry 10 [
+  create-infantry 20 [
     set group-id group-counter
     set team "egyptian"
     set shape "person"
@@ -373,7 +373,7 @@ to q-learn-move-israeli
   ]
 
   ;; MODIFIED: Check for nearby strategic locations
-  let nearby-strategic-patches strategic-locations in-radius 15
+  let nearby-strategic-patches strategic-locations in-radius 40
   ifelse any? nearby-strategic-patches and random-float 1 < 0.7 [
     ;; If strategic locations are nearby, prioritize moving toward them
     let target min-one-of nearby-strategic-patches [distance myself]
@@ -432,7 +432,7 @@ to q-learn-move-israeli
       set r r + 2000 ;; Much higher reward for strategic locations
       show (word "Israeli unit " who " captured a strategic location!")
     ][
-      set r r + 500 ;; Regular reward for normal locations
+      set r r + 1000 ;; Regular reward for normal locations
     ]
   ]
 
@@ -454,7 +454,7 @@ to q-learn-move-egyptian
     ]
 
     ;; MODIFIED: Check for nearby strategic locations under Israeli control
-    let strategic-israeli-captured strategic-locations with [captured-by = "israeli"] in-radius 20
+    let strategic-israeli-captured strategic-locations with [captured-by = "israeli"] in-radius 40
     ifelse any? strategic-israeli-captured [
       show (word "Egyptian tank " who " detected captured strategic location!")
       set action "surround"  ;; Change action mode to allow movement
@@ -504,7 +504,7 @@ to q-learn-move-egyptian
   let original-action action
 
   ;; MODIFIED: Check for nearby strategic locations under Israeli control or not yet captured
-  let strategic-targets strategic-locations with [captured-by = "israeli" or captured-by = "none"] in-radius 20
+  let strategic-targets strategic-locations with [captured-by = "israeli" or captured-by = "none"] in-radius 40
   ifelse any? strategic-targets and random-float 1 < 0.8 [
     ;; Prioritize recapturing strategic locations
     let target min-one-of strategic-targets [distance myself]
@@ -602,7 +602,7 @@ to q-learn-move-egyptian
       set r r + 2000  ;; Much higher reward for recapturing strategic locations
       show (word "Egyptian tank " who " recaptured a strategic location!")
     ][
-      set r r + 500  ;; Regular reward for normal locations
+      set r r + 1000  ;; Regular reward for normal locations
     ]
   ]
 
@@ -619,7 +619,7 @@ to q-learn-move-israeli-infantry
   let oldy ycor
 
   ;; MODIFIED: Check for nearby strategic locations
-  let nearby-strategic-patches strategic-locations in-radius 15
+  let nearby-strategic-patches strategic-locations in-radius 40
   ifelse any? nearby-strategic-patches and random-float 1 < 0.7 [
     ;; If strategic locations are nearby, prioritize moving toward them
     let target min-one-of nearby-strategic-patches [distance myself]
@@ -650,7 +650,7 @@ to q-learn-move-israeli-infantry
       set r r + 1500 ;; Higher reward for strategic locations (slightly less than tanks)
       show (word "Israeli infantry " who " captured a strategic location!")
     ][
-      set r r + 400 ;; Regular reward for normal locations
+      set r r + 750 ;; Regular reward for normal locations
     ]
   ]
 
@@ -672,7 +672,7 @@ to q-learn-move-egyptian-infantry
     ]
 
     ;; MODIFIED: Check for nearby strategic locations under Israeli control
-    let strategic-israeli-captured strategic-locations with [captured-by = "israeli"] in-radius 15
+    let strategic-israeli-captured strategic-locations with [captured-by = "israeli"] in-radius 40
     ifelse any? strategic-israeli-captured [
       show (word "Egyptian infantry " who " detected captured strategic location!")
       set action "surround"  ;; Change action mode to allow movement
@@ -715,7 +715,7 @@ to q-learn-move-egyptian-infantry
   let original-action action
 
   ;; MODIFIED: Check for nearby strategic locations under Israeli control or not yet captured
-  let strategic-targets strategic-locations with [captured-by = "israeli" or captured-by = "none"] in-radius 15
+  let strategic-targets strategic-locations with [captured-by = "israeli" or captured-by = "none"] in-radius 40
   ifelse any? strategic-targets and random-float 1 < 0.8 [
     ;; Prioritize recapturing strategic locations
     let target min-one-of strategic-targets [distance myself]
@@ -739,7 +739,7 @@ to q-learn-move-egyptian-infantry
     ]
     [
       ; Second priority: Recapture territory - MODIFIED FOR BETTER MOVEMENT
-      let israeli-captured patches in-radius 12 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
+      let israeli-captured patches in-radius 15 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
       ifelse any? israeli-captured [
         face min-one-of israeli-captured [distance myself]
         fd 1.5  ; Increased from 1
@@ -813,7 +813,7 @@ to q-learn-move-egyptian-infantry
       set r r + 1500  ;; Higher reward for recapturing strategic locations
       show (word "Egyptian infantry " who " recaptured a strategic location!")
     ][
-      set r r + 350  ;; Regular reward for normal locations
+      set r r + 750  ;; Regular reward for normal locations
     ]
   ]
 
@@ -1103,7 +1103,7 @@ to capture-chinese-farm
       set control-time control-time + 1
 
       ; Increase defensive bonus the longer a location is held
-      if control-time mod 10 = 0 and control-time <= 50 [  ; Cap at 50 ticks
+      if control-time mod 10 = 0 and control-time <= 25 [  ; Cap at 25 ticks
         set defensive-bonus defensive-bonus + 0.02
         if defensive-bonus > 0.5 [set defensive-bonus 0.5]  ; Cap at 50%
       ]
@@ -1278,7 +1278,7 @@ to check-win-condition
   let egyptian-count count turtles with [team = "egyptian"]
 
   ; Check if either side has fewer than 10 troops
-  if israeli-count < 10 or egyptian-count < 10 [
+  if israeli-count < 30 or egyptian-count < 30 [
     ; Count captured territory
     let total-chinese-farm count chinese-farm-patches
     let egyptian-control count chinese-farm-patches with [captured-by = "egyptian"]
@@ -1290,7 +1290,7 @@ to check-win-condition
     let strategic-israeli count patches with [is-strategic and captured-by = "israeli"]
 
     ; Calculate weighted territory control (strategic locations count double)
-    let strategic-weight 5  ; Strategic locations are worth 3x normal patches
+    let strategic-weight 20  ; Strategic locations are worth 3x normal patches
     let weighted-egyptian (egyptian-control - strategic-egyptian) + (strategic-egyptian * strategic-weight)
     let weighted-israeli (israeli-control - strategic-israeli) + (strategic-israeli * strategic-weight)
     let weighted-total (total-chinese-farm - strategic-total) + (strategic-total * strategic-weight)
