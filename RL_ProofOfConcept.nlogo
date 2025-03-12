@@ -2,16 +2,21 @@ globals [
   battlefield-width
   battlefield-height
 
-  ;; Two separate Q-tables:
-  ;;  - One for Israeli side
-  ;;  - One for Egyptian side
-  q-table-israeli
-  q-table-egyptian
+  q-tables-israeli  ;; A list of Q-tables, one per Israeli group
+  q-tables-egyptian  ;; A list of Q-tables, one per Egyptian group
 
-  ;; Learning parameters
-  alpha
-  gamma
-  epsilon
+  master-q-table-israeli  ;; New: Master Q-table for Israeli units
+  master-q-table-egyptian  ;; New: Master Q-table for Egyptian units
+
+  ;; Israel Learning parameters
+  i-alpha
+  i-gamma
+  i-epsilon
+
+  ;; Egyptain Learning parameters
+  e-alpha
+  e-gamma
+  e-epsilon
 
   ;; Chance that a shooting event actually kills the target (0 to 1)
   kill-prob
@@ -56,12 +61,15 @@ to setup
   set battlefield-height 100
   resize-world 0 (battlefield-width - 1) 0 (battlefield-height - 1)
   set-patch-size 5
-  set alpha 0.1
-  set gamma 0.9
-  set epsilon 0.5
+  set i-alpha 0.1
+  set i-gamma 0.1
+  set i-epsilon 0.5
+  set e-alpha 0.1
+  set e-gamma 0.9
+  set e-epsilon 0.5
   set kill-prob 0.5
-  set q-table-israeli []
-  set q-table-egyptian []
+  set q-tables-israeli []
+  set q-tables-egyptian []
   set group-counter 0
   set chinese-farm-patches []
   set strategic-locations []
@@ -79,7 +87,7 @@ to setup-egyptian-troops-on-strategic
   create-egyptian-tanks 20 [
     set group-id group-counter
     set team "egyptian"
-    set shape "circle"
+    set shape "triangle"
     set color 25
     setxy 30 65
     set state (list xcor ycor)
@@ -103,7 +111,7 @@ to setup-egyptian-troops-on-strategic
   create-egyptian-tanks 20 [
     set group-id group-counter
     set team "egyptian"
-    set shape "circle"
+    set shape "triangle"
     set color 25
     setxy 40 40
     set state (list xcor ycor)
@@ -127,7 +135,7 @@ to setup-egyptian-troops-on-strategic
   create-egyptian-tanks 20 [
     set group-id group-counter
     set team "egyptian"
-    set shape "circle"
+    set shape "triangle"
     set color 25
     setxy 50 25
     set state (list xcor ycor)
@@ -268,7 +276,7 @@ to setup-units
     create-egyptian-tanks 5 [
       set group-id group-counter
       set team "egyptian"
-      set shape "circle"
+      set shape "triangle"
       set color 25
       setxy cluster-x-west cluster-y-west
       set state (list xcor ycor)
@@ -282,7 +290,7 @@ to setup-units
     create-egyptian-tanks 5 [
       set group-id group-counter
       set team "egyptian"
-      set shape "circle"
+      set shape "triangle"
       set color 25
       setxy cluster-x-south cluster-y-south
       set state (list xcor ycor)
@@ -350,9 +358,8 @@ to go
   check-shooting
   capture-chinese-farm
   reinforce-chinese-farm
-  check-win-condition
-  show (word "Israeli Units: " count turtles with [team = "israeli"])
-  show (word "Egyptian Units: " count turtles with [team = "egyptian"])
+  ;;show (word "Israeli Units: " count turtles with [team = "israeli"])
+  ;;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
   tick
 end
 
@@ -824,40 +831,47 @@ end
 ; ACTION SELECTION & Q-VALUE LOOKUPS
 ;------------------------------------------------
 to-report choose-action-israeli [s]
-  if (random-float 1 < epsilon) [
+  if (random-float 1 < i-epsilon) [
     report one-of ["move-north" "move-south" "move-east" "move-west"]
   ]
-  report max-arg s "israeli"
+  report max-arg-group s group-id "israeli"
 end
 
 to-report choose-action-egyptian [s]
-  if (random-float 1 < epsilon) [
+  if (random-float 1 < e-epsilon) [
     report one-of ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
   ]
-  report max-arg s "egyptian"
+  report max-arg-group s group-id "egyptian"
 end
 
-to-report max-arg [s side]
-  if side = "egyptian" [
-    let actions ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
-    let best-option first actions
-    let best-value -99999
-    foreach actions [ a ->
-      let v (ifelse-value (side = "israeli")
-                [ q-value-israeli s a ]
-                [ q-value-egyptian s a ])
-      if v > best-value [
-        set best-option a
-        set best-value v
-      ]
-    ]
-    report best-option
+to-report q-value-israeli-group [g s a]
+  let qtable get-q-table-israeli g
+  let entry filter [x -> (item 0 x = s and item 1 x = a)] qtable
+  if empty? entry [ report 0 ]
+  report last first entry
+end
+
+to-report q-value-egyptian-group [g s a]
+  let qtable get-q-table-egyptian g
+  let entry filter [x -> (item 0 x = s and item 1 x = a)] qtable
+  if empty? entry [ report 0 ]
+  report last first entry
+end
+
+to-report max-arg-group [s g side]
+  let actions ifelse-value (side = "egyptian") [
+    ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
+  ] [
+    ["move-north" "move-south" "move-east" "move-west"]
   ]
-  let actions ["move-north" "move-south" "move-east" "move-west"]
   let best-option first actions
   let best-value -99999
   foreach actions [ a ->
-    let v q-value-israeli s a
+    let v ifelse-value (side = "israeli") [
+      q-value-israeli-group g s a
+    ] [
+      q-value-egyptian-group g s a
+    ]
     if v > best-value [
       set best-option a
       set best-value v
@@ -867,13 +881,13 @@ to-report max-arg [s side]
 end
 
 to-report q-value-israeli [s a]
-  let entry filter [x -> (item 0 x = s and item 1 x = a)] q-table-israeli
+  let entry filter [x -> (item 0 x = s and item 1 x = a)] q-tables-israeli
   if empty? entry [ report 0 ]
   report last first entry
 end
 
 to-report q-value-egyptian [s a]
-  let entry filter [x -> (item 0 x = s and item 1 x = a)] q-table-egyptian
+  let entry filter [x -> (item 0 x = s and item 1 x = a)] q-tables-egyptian
   if empty? entry [ report 0 ]
   report last first entry
 end
@@ -1027,33 +1041,37 @@ to-report compute-reward [s s2]
 end
 
 to update-q-table-israeli [s a r s2]
-  let next-action max-arg s2 "israeli"
-  let old-q q-value-israeli s a
-  let next-q q-value-israeli s2 next-action
+  let g group-id  ; use the turtle's group-id
+  let next-action max-arg-group s2 g "israeli"
+  let old-q q-value-israeli-group g s a
+  let next-q q-value-israeli-group g s2 next-action
+  let new-q (old-q + i-alpha * (r + i-gamma * next-q - old-q))
 
-  let new-q (old-q + alpha * (r + gamma * next-q - old-q))
-
-  ; Bonus Q-values for strategic actions
+  ; Bonus: boost Q-value for strategic patches
   if [is-strategic] of patch-here [
-    set new-q new-q * 1.25  ; 25% boost for strategic importance
+    set new-q new-q * 1.25
   ]
 
-  set q-table-israeli update-q-entry q-table-israeli s a new-q
+  let qtable get-q-table-israeli g
+  let new-table update-q-entry qtable s a new-q
+  set-q-table-israeli g new-table
 end
 
 to update-q-table-egyptian [s a r s2]
-  let next-action max-arg s2 "egyptian"
-  let old-q q-value-egyptian s a
-  let next-q q-value-egyptian s2 next-action
+  let g group-id  ; use the turtle's group-id for the Egyptian Q-table
+  let next-action max-arg-group s2 g "egyptian"
+  let old-q q-value-egyptian-group g s a
+  let next-q q-value-egyptian-group g s2 next-action
+  let new-q (old-q + e-alpha * (r + e-gamma * next-q - old-q))
 
-  let new-q (old-q + alpha * (r + gamma * next-q - old-q))
-
-  ; Bonus Q-values for strategic actions
+  ; Bonus: boost Q-value for strategic patches (Egyptians value these even more)
   if [is-strategic] of patch-here [
-    set new-q new-q * 1.3  ; 30% boost for strategic importance - Egyptians value strategic points more
+    set new-q new-q * 1.3
   ]
 
-  set q-table-egyptian update-q-entry q-table-egyptian s a new-q
+  let qtable get-q-table-egyptian g
+  let new-table update-q-entry qtable s a new-q
+  set-q-table-egyptian g new-table
 end
 
 ; Enhanced capture function that considers strategic locations
@@ -1271,62 +1289,6 @@ to check-shooting
   ]
 end
 
-; Enhanced win condition that gives more weight to strategic locations
-to check-win-condition
-  ; Count troops on each side
-  let israeli-count count turtles with [team = "israeli"]
-  let egyptian-count count turtles with [team = "egyptian"]
-
-  ; Check if either side has fewer than 10 troops
-  if israeli-count < 30 or egyptian-count < 30 [
-    ; Count captured territory
-    let total-chinese-farm count chinese-farm-patches
-    let egyptian-control count chinese-farm-patches with [captured-by = "egyptian"]
-    let israeli-control count chinese-farm-patches with [captured-by = "israeli"]
-
-    ; Strategic location control (weighted more heavily)
-    let strategic-total count patches with [is-strategic]
-    let strategic-egyptian count patches with [is-strategic and captured-by = "egyptian"]
-    let strategic-israeli count patches with [is-strategic and captured-by = "israeli"]
-
-    ; Calculate weighted territory control (strategic locations count double)
-    let strategic-weight 20  ; Strategic locations are worth 3x normal patches
-    let weighted-egyptian (egyptian-control - strategic-egyptian) + (strategic-egyptian * strategic-weight)
-    let weighted-israeli (israeli-control - strategic-israeli) + (strategic-israeli * strategic-weight)
-    let weighted-total (total-chinese-farm - strategic-total) + (strategic-total * strategic-weight)
-
-    ; Calculate percentages
-    let egyptian-percent (weighted-egyptian / weighted-total) * 100
-    let israeli-percent (weighted-israeli / weighted-total) * 100
-
-    ; Determine the winner based on territory
-    ifelse israeli-percent > egyptian-percent [
-      show "ISRAELI VICTORY!"
-      show (word "Final control: Israeli " precision israeli-percent 1 "%, Egyptian " precision egyptian-percent 1 "%")
-      show (word "Strategic locations: Israeli " strategic-israeli "/" strategic-total ", Egyptian " strategic-egyptian "/" strategic-total)
-      show (word "Final troop count: Israeli " israeli-count ", Egyptian " egyptian-count)
-    ] [
-      ifelse egyptian-percent > israeli-percent [
-        show "EGYPTIAN VICTORY!"
-        show (word "Final control: Egyptian " precision egyptian-percent 1 "%, Israeli " precision israeli-percent 1 "%")
-        show (word "Strategic locations: Egyptian " strategic-egyptian "/" strategic-total ", Israeli " strategic-israeli "/" strategic-total)
-        show (word "Final troop count: Egyptian " egyptian-count ", Israeli " israeli-count)
-      ] [
-        show "DRAW - EQUAL TERRITORIAL CONTROL"
-        show (word "Final control: Both sides " precision israeli-percent 1 "%")
-        show (word "Strategic locations: Israeli " strategic-israeli "/" strategic-total ", Egyptian " strategic-egyptian "/" strategic-total)
-        show (word "Final troop count: Israeli " israeli-count ", Egyptian " egyptian-count)
-      ]
-    ]
-
-    ; Show message and stop the simulation
-    user-message (word "Simulation ended. "
-                  ifelse-value (israeli-percent > egyptian-percent) ["Israeli victory!"]
-                  [ifelse-value (egyptian-percent > israeli-percent) ["Egyptian victory!"] ["Draw!"]])
-    stop
-  ]
-end
-
 ; NEW: Add a function to initialize the strategic values and defensive bonuses
 to setup-patch-properties
   ; Need to be called after setup-strategic-locations in the setup procedure
@@ -1351,6 +1313,40 @@ to-report my-group-center
   ]
   report patch-here
 end
+
+
+to ensure-q-table-israeli [g]
+  while [g >= length q-tables-israeli] [
+    set q-tables-israeli lput [] q-tables-israeli
+  ]
+end
+
+to-report get-q-table-israeli [g]
+  ensure-q-table-israeli g
+  report item g q-tables-israeli
+end
+
+to set-q-table-israeli [g new-table]
+  ensure-q-table-israeli g
+  set q-tables-israeli replace-item g q-tables-israeli new-table
+end
+
+to ensure-q-table-egyptian [g]
+  while [g >= length q-tables-egyptian] [
+    set q-tables-egyptian lput [] q-tables-egyptian
+  ]
+end
+
+to-report get-q-table-egyptian [g]
+  ensure-q-table-egyptian g
+  report item g q-tables-egyptian
+end
+
+to set-q-table-egyptian [g new-table]
+  ensure-q-table-egyptian g
+  set q-tables-egyptian replace-item g q-tables-egyptian new-table
+end
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
