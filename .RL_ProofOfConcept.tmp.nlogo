@@ -2,11 +2,8 @@ globals [
   battlefield-width
   battlefield-height
 
-  ;; Two separate Q-tables:
-  ;;  - One for Israeli side
-  ;;  - One for Egyptian side
-  q-table-israeli
-  q-table-egyptian
+  q-tables-israeli  ;; A list of Q-tables, one per Israeli group
+  q-tables-egyptian  ;; A list of Q-tables, one per Egyptian group
 
   ;; Israel Learning parameters
   i-alpha
@@ -50,7 +47,6 @@ turtles-own [
   team
   group-id
   defense-center  ;; Used for Egyptian defensive positioning
-
 ]
 
 ;------------------------------------------------
@@ -69,8 +65,8 @@ to setup
   set e-gamma 0.9
   set e-epsilon 0.5
   set kill-prob 0.5
-  set q-table-israeli []
-  set q-table-egyptian []
+  set q-tables-israeli []
+  set q-tables-egyptian []
   set group-counter 0
   set chinese-farm-patches []
   set strategic-locations []
@@ -836,37 +832,44 @@ to-report choose-action-israeli [s]
   if (random-float 1 < i-epsilon) [
     report one-of ["move-north" "move-south" "move-east" "move-west"]
   ]
-  report max-arg s "israeli"
+  report max-arg-group s group-id "israeli"
 end
 
 to-report choose-action-egyptian [s]
   if (random-float 1 < e-epsilon) [
     report one-of ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
   ]
-  report max-arg s "egyptian"
+  report max-arg-group s group-id "egyptian"
 end
 
-to-report max-arg [s side]
-  if side = "egyptian" [
-    let actions ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
-    let best-option first actions
-    let best-value -99999
-    foreach actions [ a ->
-      let v (ifelse-value (side = "israeli")
-                [ q-value-israeli s a ]
-                [ q-value-egyptian s a ])
-      if v > best-value [
-        set best-option a
-        set best-value v
-      ]
-    ]
-    report best-option
+to-report q-value-israeli-group [g s a]
+  let qtable get-q-table-israeli g
+  let entry filter [x -> (item 0 x = s and item 1 x = a)] qtable
+  if empty? entry [ report 0 ]
+  report last first entry
+end
+
+to-report q-value-egyptian-group [g s a]
+  let qtable get-q-table-egyptian g
+  let entry filter [x -> (item 0 x = s and item 1 x = a)] qtable
+  if empty? entry [ report 0 ]
+  report last first entry
+end
+
+to-report max-arg-group [s g side]
+  let actions ifelse-value (side = "egyptian") [
+    ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
+  ] [
+    ["move-north" "move-south" "move-east" "move-west"]
   ]
-  let actions ["move-north" "move-south" "move-east" "move-west"]
   let best-option first actions
   let best-value -99999
   foreach actions [ a ->
-    let v q-value-israeli s a
+    let v ifelse-value (side = "israeli") [
+      q-value-israeli-group g s a
+    ] [
+      q-value-egyptian-group g s a
+    ]
     if v > best-value [
       set best-option a
       set best-value v
@@ -876,13 +879,13 @@ to-report max-arg [s side]
 end
 
 to-report q-value-israeli [s a]
-  let entry filter [x -> (item 0 x = s and item 1 x = a)] q-table-israeli
+  let entry filter [x -> (item 0 x = s and item 1 x = a)] q-tables-israeli
   if empty? entry [ report 0 ]
   report last first entry
 end
 
 to-report q-value-egyptian [s a]
-  let entry filter [x -> (item 0 x = s and item 1 x = a)] q-table-egyptian
+  let entry filter [x -> (item 0 x = s and item 1 x = a)] q-tables-egyptian
   if empty? entry [ report 0 ]
   report last first entry
 end
@@ -1035,20 +1038,7 @@ to-report compute-reward [s s2]
   report r
 end
 
-to update-q-table-israeli [s a r s2]
-  let next-action max-arg s2 "israeli"
-  let old-q q-value-israeli s a
-  let next-q q-value-israeli s2 next-action
 
-  let new-q (old-q + i-alpha * (r + i-gamma * next-q - old-q))
-
-  ; Bonus Q-values for strategic actions
-  if [is-strategic] of patch-here [
-    set new-q new-q * 1.25  ; 25% boost for strategic importance
-  ]
-
-  set q-table-israeli update-q-entry q-table-israeli s a new-q
-end
 
 to update-q-table-egyptian [s a r s2]
   let next-action max-arg s2 "egyptian"
@@ -1359,6 +1349,39 @@ to-report my-group-center
     report patch avg-x avg-y
   ]
   report patch-here
+end
+
+
+to ensure-q-table-israeli [g]
+  while [g >= length q-tables-israeli] [
+    set q-tables-israeli lput [] q-tables-israeli
+  ]
+end
+
+to-report get-q-table-israeli [g]
+  ensure-q-table-israeli g
+  report item g q-tables-israeli
+end
+
+to set-q-table-israeli [g new-table]
+  ensure-q-table-israeli g
+  set q-tables-israeli replace-item g q-tables-israeli new-table
+end
+
+to ensure-q-table-egyptian [g]
+  while [g >= length q-tables-egyptian] [
+    set q-tables-egyptian lput [] q-tables-egyptian
+  ]
+end
+
+to-report get-q-table-egyptian [g]
+  ensure-q-table-egyptian g
+  report item g q-tables-egyptian
+end
+
+to set-q-table-egyptian [g new-table]
+  ensure-q-table-egyptian g
+  set q-tables-egyptian replace-item g q-tables-egyptian new-table
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
