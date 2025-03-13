@@ -160,7 +160,7 @@ end
 
 to setup-israeli-attackers-southeast
   ;; Israeli Attackers: Tanks in the southeast region
-  repeat 5 [
+  repeat 8 [
     let cluster-x (70 + random 10)  ;; x between 80 and 89
     let cluster-y (20 + random 20)     ;; y between 0 and 19
     create-israeli-tanks 5 [
@@ -176,7 +176,7 @@ to setup-israeli-attackers-southeast
   ]
 
   ;; Israeli Attackers: Infantry in the southeast region
-  repeat 5 [
+  repeat 8 [
     let cluster-x (70 + random 10)
     let cluster-y (20 + random 20)
     create-infantry 5 [
@@ -302,7 +302,7 @@ to go
   check-win-condition
   check-landmines
   ;;show (word "Israeli Units: " count turtles with [team = "israeli"])
-  ;;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
+  ;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
   tick
 end
 
@@ -1325,7 +1325,28 @@ to setup-fortified-lines
   ]
 end
 
-
+to setup-mines
+  ask patches with [ terrain-type = "chinese-farm" ] [
+    if pycor < 35 and pxcor < 50 [
+      if random-float 1 < 0.1 [  ;; 4% chance for patches below y=50
+        set mine? true
+        set pcolor red
+      ]
+    ]
+    if pycor >= 40 and pxcor >= 60[
+      if random-float 1 < 0.005 [  ;; 0.5% chance for patches above y=50
+        set mine? true
+        set pcolor red
+      ]
+    ]
+    if pycor >= 30 and pxcor <= 60 and pycor <= 45 and pxcor >= 40[
+      if random-float 1 < 0.1 [  ;; 0.5% chance for patches above y=50
+        set mine? true
+        set pcolor red
+      ]
+    ]
+  ]
+end
 
 to check-landmines
   ask turtles [
