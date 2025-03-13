@@ -40,6 +40,7 @@ patches-own [
   strategic-value
   defensive-bonus
   control-time
+  fortified?
 ]
 turtles-own [
   state
@@ -60,12 +61,12 @@ to setup
   set battlefield-height 100
   resize-world 0 (battlefield-width - 1) 0 (battlefield-height - 1)
   set-patch-size 5
-  set i-alpha 0.0
-  set i-gamma 0.1
-  set i-epsilon 0.1
-  set e-alpha 0.9
-  set e-gamma 0.9
-  set e-epsilon 0.5
+  set i-alpha 0.5
+  set i-gamma 0.5
+  set i-epsilon 0.5
+  set e-alpha 0.6
+  set e-gamma 0.3
+  set e-epsilon 0.8
   set kill-prob 0.5
   set q-tables-israeli []
   set q-tables-egyptian []
@@ -76,6 +77,7 @@ to setup
   setup-strategic-locations
   setup-egyptian-troops-on-strategic  ;; If you want Egyptian forces on strategic locations
   setup-units
+  setup-fortified-lines
   setup-israeli-attackers-southeast    ;; Spawn Israeli attackers in the southeast
   reset-ticks
 end
@@ -83,7 +85,7 @@ end
 
 to setup-egyptian-troops-on-strategic
   ;; Strategic Location 1: (30,65)
-  create-egyptian-tanks 20 [
+  create-egyptian-tanks 35 [
     set group-id group-counter
     set team "egyptian"
     set shape "triangle"
@@ -94,7 +96,7 @@ to setup-egyptian-troops-on-strategic
     set size 1.5
   ]
   set group-counter group-counter + 1
-  create-infantry 20 [
+  create-infantry 30 [
     set group-id group-counter
     set team "egyptian"
     set shape "person"
@@ -107,7 +109,7 @@ to setup-egyptian-troops-on-strategic
   set group-counter group-counter + 1
 
   ;; Strategic Location 2: (40,40)
-  create-egyptian-tanks 20 [
+  create-egyptian-tanks 40 [
     set group-id group-counter
     set team "egyptian"
     set shape "triangle"
@@ -118,7 +120,7 @@ to setup-egyptian-troops-on-strategic
     set size 1.5
   ]
   set group-counter group-counter + 1
-  create-infantry 20 [
+  create-infantry 30 [
     set group-id group-counter
     set team "egyptian"
     set shape "person"
@@ -131,7 +133,7 @@ to setup-egyptian-troops-on-strategic
   set group-counter group-counter + 1
 
   ;; Strategic Location 3: (50,25)
-  create-egyptian-tanks 20 [
+  create-egyptian-tanks 35 [
     set group-id group-counter
     set team "egyptian"
     set shape "triangle"
@@ -142,7 +144,7 @@ to setup-egyptian-troops-on-strategic
     set size 1.5
   ]
   set group-counter group-counter + 1
-  create-infantry 20 [
+  create-infantry 30 [
     set group-id group-counter
     set team "egyptian"
     set shape "person"
@@ -190,11 +192,11 @@ to setup-israeli-attackers-southeast
 end
 
 to setup-terrain
-  ;; Set the entire battlefield to desert
   ask patches [
     set terrain-type "desert-west"
     set pcolor yellow
-    set is-strategic false ;; NEW: initialize strategic flag
+    set is-strategic false
+    set fortified? false   ;; Initialize fortified? to false
   ]
   ;; Add a vertical blue line (for visual reference)
   ask patches with [pxcor <= 20 and pxcor >= 19] [
@@ -267,37 +269,6 @@ to setup-units
     ]
     set group-counter group-counter + 1
   ]
-  ;; Egyptian Tanks: 5 groups of 5 (total 25 tanks)
-  repeat 5 [
-    ;; Western border tanks
-    let cluster-x-west 21
-    let cluster-y-west (20 + random 60)
-    create-egyptian-tanks 5 [
-      set group-id group-counter
-      set team "egyptian"
-      set shape "triangle"
-      set color 25
-      setxy cluster-x-west cluster-y-west
-      set state (list xcor ycor)
-      set action "hold-position"
-      set size 1.5
-    ]
-    set group-counter group-counter + 1
-    ;; Southern border tanks
-    let cluster-x-south (21 + random 39)
-    let cluster-y-south 20
-    create-egyptian-tanks 5 [
-      set group-id group-counter
-      set team "egyptian"
-      set shape "triangle"
-      set color 25
-      setxy cluster-x-south cluster-y-south
-      set state (list xcor ycor)
-      set action "hold-position"
-      set size 1.5
-    ]
-    set group-counter group-counter + 1
-  ]
   ;; Israeli Infantry: 5 groups of 5 (total 25 infantry)
   repeat 5 [
     let cluster-x (25 + random 15)
@@ -310,37 +281,6 @@ to setup-units
       setxy cluster-x cluster-y
       set state (list xcor ycor)
       set action ""
-    ]
-    set group-counter group-counter + 1
-  ]
-  ;; Egyptian Infantry: 5 groups of 5 (total 25 infantry)
-  repeat 5 [
-    ;; Western border infantry
-    let cluster-x-west 21
-    let cluster-y-west (20 + random 60)
-    create-infantry 5 [
-      set group-id group-counter
-      set team "egyptian"
-      set shape "person"
-      set color 15
-      setxy cluster-x-west cluster-y-west
-      set state (list xcor ycor)
-      set action "hold-position"
-      set size 1.5
-    ]
-    set group-counter group-counter + 1
-    ;; Eastern border infantry
-    let cluster-x-east 60
-    let cluster-y-east (20 + random 60)
-    create-infantry 5 [
-      set group-id group-counter
-      set team "egyptian"
-      set shape "person"
-      set color 15
-      setxy cluster-x-east cluster-y-east
-      set state (list xcor ycor)
-      set action "hold-position"
-      set size 1.5
     ]
     set group-counter group-counter + 1
   ]
@@ -357,6 +297,7 @@ to go
   check-shooting
   capture-chinese-farm
   reinforce-chinese-farm
+  check-win-condition
   ;;show (word "Israeli Units: " count turtles with [team = "israeli"])
   ;;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
   tick
@@ -929,73 +870,51 @@ to-report compute-reward [s s2]
   let oldy item 1 s
   let newy item 1 s2
 
-  ; Base reward calculation
   let r 0
 
-  ; Distance-based reward components
-  let old-dist 0
-  let new-dist 0
-
   if team = "israeli" [
-    ; Israeli reward is based on moving toward/into the Chinese Farm and enemy units
-    ; Distance to farm center
-    set old-dist distance chinese-farm-center
-    set new-dist sqrt ((newx - [pxcor] of chinese-farm-center) ^ 2 + (newy - [pycor] of chinese-farm-center) ^ 2)
-
-    ; Reward for moving closer to the farm
-    if new-dist < old-dist [
-      set r r + 10
-    ]
-
-    ; Reward for being in the farm
+    ;; Israeli reward calculation (unchanged)
+    let old-dist distance chinese-farm-center
+    let new-dist sqrt (((newx - [pxcor] of chinese-farm-center) ^ 2) + ((newy - [pycor] of chinese-farm-center) ^ 2))
+    set r r + ifelse-value (new-dist < old-dist) [10] [0]
     if [terrain-type] of patch newx newy = "chinese-farm" [
       set r r + 50
-
-      ; ENHANCED: Extra reward for being in strategic locations
       if [is-strategic] of patch newx newy [
         set r r + (100 * [strategic-value] of patch newx newy)
-        ; Show message about strategic positioning
         if [captured-by] of patch newx newy != "israeli" [
           show (word "Israeli unit " who " positioning to capture a strategic location!")
         ]
       ]
     ]
-
-    ; Reward for eliminating enemy units
     let nearby-enemies count turtles with [team = "egyptian"] in-radius 3
     set r r + (nearby-enemies * 20)
-
-    ; Strategic objective reward - control of Chinese Farm
     let israeli-control count chinese-farm-patches with [captured-by = "israeli"]
     let control-pct (israeli-control / count chinese-farm-patches) * 100
-    set r r + (control-pct / 10)  ; Small incremental reward based on control percentage
+    set r r + (control-pct / 10)
   ]
 
   if team = "egyptian" [
-    ; Egyptian reward is defensive - hold the farm and eliminate invaders
+    ;; Egyptian reward calculation:
     if [terrain-type] of patch newx newy = "chinese-farm" [
       set r r + 30
-
-      ; ENHANCED: Extra reward for being in strategic locations
       if [is-strategic] of patch newx newy [
         set r r + (75 * [strategic-value] of patch newx newy)
-        ; Show message about strategic positioning
         if [captured-by] of patch newx newy != "egyptian" [
           show (word "Egyptian unit " who " positioning to defend a strategic location!")
         ]
       ]
     ]
-
-    ; Reward for eliminating enemy units
     let nearby-enemies count turtles with [team = "israeli"] in-radius 3
     set r r + (nearby-enemies * 25)
-
-    ; Strategic objective reward - control of Chinese Farm
     let egyptian-control count chinese-farm-patches with [captured-by = "egyptian"]
     let control-pct (egyptian-control / count chinese-farm-patches) * 100
-    set r r + (control-pct / 5)  ; More significant for defenders
-  ]
+    set r r + (control-pct / 5)
 
+    ;; NEW: Bonus reward for staying in the fortified zone.
+    if [fortified?] of patch newx newy [
+      set r r + 1500   ;; Adjust bonus value as needed
+    ]
+  ]
   report r
 end
 
@@ -1039,15 +958,12 @@ to capture-chinese-farm
     if team = "israeli" [
       ask patch-here [
         if terrain-type = "chinese-farm" and captured-by != "israeli" [
-          ; Check if this is a strategic location
           ifelse is-strategic [
             set captured-by "israeli"
-            set pcolor orange  ; Different color for strategic locations under Israeli control
-            ; Report strategic capture
+            set pcolor orange  ;; Strategic capture color for Israelis
             show (word "Strategic location captured by Israeli forces!")
-            ; Reset control time
             set control-time 0
-          ] [
+          ][
             set captured-by "israeli"
             set pcolor brown
           ]
@@ -1057,51 +973,22 @@ to capture-chinese-farm
     if team = "egyptian" [
       ask patch-here [
         if terrain-type = "chinese-farm" [
-          ; Check if this is a strategic location
-          ifelse is-strategic [
-            set captured-by "egyptian"
-            set pcolor turquoise  ; Different color for strategic locations under Egyptian control
-            ; Report strategic capture
-            show (word "Strategic location secured by Egyptian forces!")
-            ; Reset control time
-            set control-time 0
-          ] [
-            set captured-by "egyptian"
-            set pcolor green
+          ;; Only allow capture if the patch is NOT fortified
+          if not fortified? [
+            ifelse is-strategic [
+              set captured-by "egyptian"
+              set pcolor turquoise  ;; Strategic capture color for Egyptians
+              show (word "Strategic location secured by Egyptian forces!")
+              set control-time 0
+            ][
+              set captured-by "egyptian"
+              set pcolor green
+            ]
           ]
         ]
       ]
     ]
   ]
-
-  ; Track control time for strategic locations
-  ask patches with [is-strategic] [
-    if captured-by != "none" [
-      set control-time control-time + 1
-
-      ; Increase defensive bonus the longer a location is held
-      if control-time mod 10 = 0 and control-time <= 25 [  ; Cap at 25 ticks
-        set defensive-bonus defensive-bonus + 0.02
-        if defensive-bonus > 0.5 [set defensive-bonus 0.5]  ; Cap at 50%
-      ]
-    ]
-  ]
-
-  ; Visual indicator of control percentages
-  let total-chinese-farm count chinese-farm-patches
-  let egyptian-control count chinese-farm-patches with [captured-by = "egyptian"]
-  let israeli-control count chinese-farm-patches with [captured-by = "israeli"]
-  let egyptian-percent (egyptian-control / total-chinese-farm) * 100
-  let israeli-percent (israeli-control / total-chinese-farm) * 100
-
-  ; Strategic control indicators
-  let strategic-total count patches with [is-strategic]
-  let strategic-egyptian count patches with [is-strategic and captured-by = "egyptian"]
-  let strategic-israeli count patches with [is-strategic and captured-by = "israeli"]
-
-  show (word "Control: Egyptian " precision egyptian-percent 1 "%, Israeli " precision israeli-percent 1 "%")
-  show (word "Strategic Control: Egyptian " strategic-egyptian "/" strategic-total
-       ", Israeli " strategic-israeli "/" strategic-total)
 end
 
 ; Enhanced to prioritize strategic locations
@@ -1232,20 +1119,24 @@ to check-shooting
   ]
 
   ask egyptian-tanks [
-    let targets turtles in-radius 5 with [team = "israeli"]
-    if any? targets [
-      show (word "Egyptian tank " who " is shooting Israeli units!")
-    ]
-    ask targets [
-      ; Adjust kill probability based on defensive bonus if target is on strategic location
-      let effective-kill-prob kill-prob
-      if [is-strategic] of patch-here and [captured-by] of patch-here = team [
-        set effective-kill-prob kill-prob * (1 - [defensive-bonus] of patch-here)
-        if effective-kill-prob < 0.1 [set effective-kill-prob 0.1]  ; Minimum 10% chance
-      ]
-      if random-float 1 < effective-kill-prob [die]
-    ]
+  let targets turtles in-radius 5 with [team = "israeli"]
+  if any? targets [
+    show (word "Egyptian tank " who " is shooting Israeli units!")
   ]
+  ask targets [
+    let effective-kill-prob kill-prob
+    if [is-strategic] of patch-here and [captured-by] of patch-here = team [
+      set effective-kill-prob kill-prob * (1 - [defensive-bonus] of patch-here)
+      if effective-kill-prob < 0.1 [ set effective-kill-prob 0.1 ]
+    ]
+    ;; NEW: If the shooter is on a fortified patch, double the accuracy.
+    if [fortified?] of patch-here [
+      set effective-kill-prob effective-kill-prob * 2
+      if effective-kill-prob > 1 [ set effective-kill-prob 1 ]
+    ]
+    if random-float 1 < effective-kill-prob [ die ]
+  ]
+]
 end
 
 ; NEW: Add a function to initialize the strategic values and defensive bonuses
@@ -1320,6 +1211,119 @@ to penalize-death
   die
 end
 
+to grid-search
+  ;; Define parameter ranges for Israeli learning parameters.
+  let i-alpha-values [0.1 0.3 0.5 0.7 0.9]
+  let i-gamma-values [0.1 0.3 0.5 0.7 0.9]
+  let i-epsilon-values [0.1 0.3 0.5 0.7 0.9]
+
+  ;; Create an empty list to store results.
+  let results []
+
+  ;; Loop over every combination of parameter values.
+  foreach i-alpha-values [ ia ->
+    foreach i-gamma-values [ ig ->
+      foreach i-epsilon-values [ ie ->
+        ;; Create an empty list to store the 5 trial outcomes.
+        let trial-results []
+
+        ;; Run each combination 5 times.
+        repeat 5 [
+          ;; Set the model parameters.
+          set i-alpha ia
+          set i-gamma ig
+          set i-epsilon ie
+
+          ;; Setup the simulation.
+          setup
+
+          ;; Run the simulation for a fixed number of ticks.
+          repeat 100 [
+            go
+          ]
+
+          ;; At the end, count the remaining units for each side.
+          let israeli-count count turtles with [team = "israeli"]
+          let egyptian-count count turtles with [team = "egyptian"]
+
+          ;; Determine the winner based on which side has more units left.
+          let winner (ifelse-value (israeli-count > egyptian-count)
+                          ["israeli"]
+                          ["egyptian"])
+
+          ;; Store the result of this trial.
+          set trial-results lput (list israeli-count egyptian-count winner) trial-results
+        ]
+
+        ;; Store the results for the current parameter combination.
+        set results lput (list ia ig ie trial-results) results
+
+        ;; Print the current parameter combination and its trial results.
+        print (word "Parameters: i-alpha = " ia ", i-gamma = " ig ", i-epsilon = " ie
+                    " --> Trial Results: " trial-results)
+      ]
+    ]
+  ]
+
+  ;; Optionally, print the full list of results.
+  print "Full grid search results:"
+  print results
+end
+
+to check-win-condition
+  ;; Win Condition 1: One side loses all units.
+  if (count turtles with [team = "israeli"] = 0) [
+    show "Egyptians win! Israelis have lost all their units."
+    stop
+  ]
+  if (count turtles with [team = "egyptian"] = 0) [
+    show "Israelis win! Egyptians have lost all their units."
+    stop
+  ]
+
+  ;; Win Condition 2: After 100 ticks, a team has fewer than 10 tanks.
+  if ticks >= 100 [
+    if (count israeli-tanks < 10) [
+      show "Egyptians win! Israelis have less than 10 tanks after 100 ticks."
+      stop
+    ]
+    if (count egyptian-tanks < 10) [
+      show "Israelis win! Egyptians have less than 10 tanks after 100 ticks."
+      stop
+    ]
+  ]
+end
+
+to setup-fortified-lines
+  ;; border-thickness is 3 patches.
+  let border-thickness 3
+  ;; The outer fortified square extends 3 patches beyond the strategic block.
+  ;; For a strategic center at (cx,cy), the strategic block covers:
+  ;;    x from (cx-1) to (cx+1) and y from (cy-1) to (cy+1)
+  ;; The outer boundary will be:
+  ;;    x from (cx - 1 - border-thickness) to (cx + 1 + border-thickness)
+  ;;    y from (cy - 1 - border-thickness) to (cy + 1 + border-thickness)
+  let strategic-centers [[30 65] [40 40] [50 25]]
+  foreach strategic-centers [ sc ->
+    let cx item 0 sc
+    let cy item 1 sc
+    let x-min (cx - 1 - border-thickness)  ; = cx - 4
+    let x-max (cx + 1 + border-thickness)  ; = cx + 4
+    let y-min (cy - 1 - border-thickness)  ; = cy - 4
+    let y-max (cy + 1 + border-thickness)  ; = cy + 4
+    ;; Fortify all patches in that square that are NOT in the inner strategic block.
+    ask patches with [
+      pxcor >= x-min and pxcor <= x-max and
+      pycor >= y-min and pycor <= y-max and
+      (pxcor < (cx - 1) or pxcor > (cx + 1) or pycor < (cy - 1) or pycor > (cy + 1))
+    ] [
+      if terrain-type = "chinese-farm" [
+        set fortified? true
+        set pcolor pink
+      ]
+    ]
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
