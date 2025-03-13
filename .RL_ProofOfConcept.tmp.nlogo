@@ -25,7 +25,6 @@ globals [
   chinese-farm-patches
   chinese-farm-center
 
-  ;; Strategic locations - NEW
   strategic-locations
 ]
 
@@ -41,6 +40,7 @@ patches-own [
   defensive-bonus
   control-time
   fortified?
+  mine?
 ]
 turtles-own [
   state
@@ -64,9 +64,9 @@ to setup
   set i-alpha 0.5
   set i-gamma 0.5
   set i-epsilon 0.5
-  set e-alpha 0.6
-  set e-gamma 0.3
-  set e-epsilon 0.8
+  set e-alpha 0.9
+  set e-gamma 0.9
+  set e-epsilon 0.9
   set kill-prob 0.5
   set q-tables-israeli []
   set q-tables-egyptian []
@@ -78,6 +78,7 @@ to setup
   setup-egyptian-troops-on-strategic  ;; If you want Egyptian forces on strategic locations
   setup-units
   setup-fortified-lines
+  setup-mines
   setup-israeli-attackers-southeast    ;; Spawn Israeli attackers in the southeast
   reset-ticks
 end
@@ -85,12 +86,12 @@ end
 
 to setup-egyptian-troops-on-strategic
   ;; Strategic Location 1: (30,65)
-  create-egyptian-tanks 30 [
+  create-egyptian-tanks 50 [
     set group-id group-counter
     set team "egyptian"
     set shape "triangle"
     set color 25
-    setxy 30 65
+    setxy 30 40
     set state (list xcor ycor)
     set action "hold-position"
     set size 1.5
@@ -101,7 +102,7 @@ to setup-egyptian-troops-on-strategic
     set team "egyptian"
     set shape "person"
     set color 15
-    setxy 30 65
+    setxy 30 40
     set state (list xcor ycor)
     set action "hold-position"
     set size 1.5
@@ -109,23 +110,23 @@ to setup-egyptian-troops-on-strategic
   set group-counter group-counter + 1
 
   ;; Strategic Location 2: (40,40)
-  create-egyptian-tanks 3 [
+  create-egyptian-tanks 40 [
     set group-id group-counter
     set team "egyptian"
     set shape "triangle"
     set color 25
-    setxy 40 40
+    setxy 50 50
     set state (list xcor ycor)
     set action "hold-position"
     set size 1.5
   ]
   set group-counter group-counter + 1
-  create-infantry 25 [
+  create-infantry 30 [
     set group-id group-counter
     set team "egyptian"
     set shape "person"
     set color 15
-    setxy 40 40
+    setxy 50 50
     set state (list xcor ycor)
     set action "hold-position"
     set size 1.5
@@ -133,23 +134,23 @@ to setup-egyptian-troops-on-strategic
   set group-counter group-counter + 1
 
   ;; Strategic Location 3: (50,25)
-  create-egyptian-tanks 30 [
+  create-egyptian-tanks 35 [
     set group-id group-counter
     set team "egyptian"
     set shape "triangle"
     set color 25
-    setxy 50 25
+    setxy 50 70
     set state (list xcor ycor)
     set action "hold-position"
     set size 1.5
   ]
   set group-counter group-counter + 1
-  create-infantry 25 [
+  create-infantry 30 [
     set group-id group-counter
     set team "egyptian"
     set shape "person"
     set color 15
-    setxy 50 25
+    setxy 50 70
     set state (list xcor ycor)
     set action "hold-position"
     set size 1.5
@@ -196,7 +197,8 @@ to setup-terrain
     set terrain-type "desert-west"
     set pcolor yellow
     set is-strategic false
-    set fortified? false   ;; Initialize fortified? to false
+    set fortified? false
+    set mine? false     ;; Initialize mine? to false for every patch
   ]
   ;; Add a vertical blue line (for visual reference)
   ask patches with [pxcor <= 20 and pxcor >= 19] [
@@ -228,13 +230,13 @@ end
 to setup-strategic-locations
   ;; Create 3 strategic locations (3x3 patches each)
   ;; Location 1: Northern high ground
-  create-strategic-location 30 65
+  create-strategic-location 30 40
 
   ;; Location 2: Central crossroads
-  create-strategic-location 40 40
+  create-strategic-location 50 50
 
   ;; Location 3: Southern water source
-  create-strategic-location 50 25
+  create-strategic-location 50 70
 end
 
 ;; NEW: Helper procedure to create a 3x3 strategic location
@@ -298,6 +300,7 @@ to go
   capture-chinese-farm
   reinforce-chinese-farm
   check-win-condition
+  check-landmines
   ;;show (word "Israeli Units: " count turtles with [team = "israeli"])
   ;;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
   tick
@@ -805,9 +808,10 @@ to execute-action [a]
   if a = "move-south" [ set heading 180 fd 1 ]
   if a = "move-east"  [ set heading 90  fd 1 ]
   if a = "move-west"  [ set heading 270 fd 1 ]
+
   if a = "defend" [
     ; Modified to make units stay in place more
-    let nearest-enemy min-one-of turtles with [team = "israeli"] [ distance myself ]
+    let nearest-enemy min-one-of turtles with [ team = "israeli" ] [ distance myself ]
     if nearest-enemy != nobody [
       face nearest-enemy
       ; Only move forward if enemy is close
@@ -816,37 +820,33 @@ to execute-action [a]
       ]
     ]
   ]
-  if a = "surround" [
-  let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
-  ifelse target != nobody [
-  let direct-angle towards target
-  let attack-range 2
-  let current-distance distance target
 
-  ; Modified to improve surrounding behavior
-  ifelse current-distance <= attack-range [
-    ; We're close enough to attack
-    face target
-    fd 1
-    if random-float 1 < kill-prob [ ask target [ die ] ]
-  ] [
-    ; We're far, approach but try to flank
-    ; Add some randomness to the approach angle for better surrounding
-    set heading (towards target + (random 60 - 30))
-    fd 1.5
-  ]
-] [
-  ; No target found, look for Israeli-captured territory instead
-  let israeli-captured patches in-radius 15 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
-  ifelse any? israeli-captured [
-    face min-one-of israeli-captured [distance myself]
-    fd 1.5
-  ] [
-    ; Just move randomly to avoid getting stuck
-    rt random 90 - 45
-    fd 1
-  ]
-]
+  if a = "surround" [
+    let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
+    if target != nobody [
+      let long-attack-range 6  ; longer distance for ranged attack
+      if distance target <= long-attack-range [
+        face target
+        ; Attack with probability kill-prob
+        if random-float 1 < kill-prob [ ask target [ die ] ]
+      ]
+      if distance target > long-attack-range [
+        set heading towards target
+        fd 1.5
+      ]
+    ]
+    if target = nobody [
+      ; Fallback: if no target is found, try to move toward Israeli-captured territory or wander
+      let israeli-captured patches in-radius 15 with [ terrain-type = "chinese-farm" and captured-by = "israeli" ]
+      if any? israeli-captured [
+        face min-one-of israeli-captured [ distance myself ]
+        fd 1.5
+      ]
+      if not any? israeli-captured [
+        rt (random 90 - 45)
+        fd 1
+      ]
+    ]
   ]
 end
 
@@ -1303,7 +1303,7 @@ to setup-fortified-lines
   ;; The outer boundary will be:
   ;;    x from (cx - 1 - border-thickness) to (cx + 1 + border-thickness)
   ;;    y from (cy - 1 - border-thickness) to (cy + 1 + border-thickness)
-  let strategic-centers [[30 65] [40 40] [50 25]]
+  let strategic-centers [[30 40] [50 50] [50 70]]
   foreach strategic-centers [ sc ->
     let cx item 0 sc
     let cy item 1 sc
@@ -1320,6 +1320,26 @@ to setup-fortified-lines
       if terrain-type = "chinese-farm" [
         set fortified? true
         set pcolor pink
+      ]
+    ]
+  ]
+end
+
+
+
+to check-landmines
+  ask turtles [
+    if [mine?] of patch-here [
+      ;; Turtle touches a mine: apply death penalty and kill the turtle.
+      penalize-death
+      ;; Remove the mine after triggering and reset the patch color.
+      ask patch-here [
+        set mine? false
+        ;; Restore the patch color based on its terrain.
+        if terrain-type = "chinese-farm" [ set pcolor green ]
+        if terrain-type = "road" [ set pcolor gray ]
+        if terrain-type = "desert-west" [ set pcolor yellow ]
+        if is-strategic [ set pcolor violet ]
       ]
     ]
   ]
