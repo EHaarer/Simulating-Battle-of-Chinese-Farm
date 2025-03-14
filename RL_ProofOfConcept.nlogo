@@ -64,9 +64,9 @@ to setup
   set i-alpha 0.5
   set i-gamma 0.5
   set i-epsilon 0.5
-  set e-alpha 0.9
-  set e-gamma 0.9
-  set e-epsilon 0.9
+  set e-alpha 0.1
+  set e-gamma 0.1
+  set e-epsilon 0.1
   set kill-prob 0.5
   set q-tables-israeli []
   set q-tables-egyptian []
@@ -1213,26 +1213,26 @@ end
 
 to grid-search
   ;; Define parameter ranges for Israeli learning parameters.
-  let i-alpha-values [0.1 0.3 0.5 0.7 0.9]
-  let i-gamma-values [0.1 0.3 0.5 0.7 0.9]
-  let i-epsilon-values [0.1 0.3 0.5 0.7 0.9]
+  let e-alpha-values [0.2 0.5 0.8]
+  let e-gamma-values [0.2 0.5 0.8]
+  let e-epsilon-values [0.2 0.5 0.8]
 
   ;; Create an empty list to store results.
   let results []
 
   ;; Loop over every combination of parameter values.
-  foreach i-alpha-values [ ia ->
-    foreach i-gamma-values [ ig ->
-      foreach i-epsilon-values [ ie ->
+  foreach e-alpha-values [ ea ->
+    foreach e-gamma-values [ eg ->
+      foreach e-epsilon-values [ ee ->
         ;; Create an empty list to store the 5 trial outcomes.
         let trial-results []
 
         ;; Run each combination 5 times.
-        repeat 5 [
+        repeat 3 [
           ;; Set the model parameters.
-          set i-alpha ia
-          set i-gamma ig
-          set i-epsilon ie
+          set e-alpha ea
+          set e-gamma eg
+          set e-epsilon ee
 
           ;; Setup the simulation.
           setup
@@ -1256,10 +1256,10 @@ to grid-search
         ]
 
         ;; Store the results for the current parameter combination.
-        set results lput (list ia ig ie trial-results) results
+        set results lput (list ea eg ee trial-results) results
 
         ;; Print the current parameter combination and its trial results.
-        print (word "Parameters: i-alpha = " ia ", i-gamma = " ig ", i-epsilon = " ie
+        print (word "Parameters: e-alpha = " ea ", e-gamma = " eg ", e-epsilon = " ee
                     " --> Trial Results: " trial-results)
       ]
     ]
