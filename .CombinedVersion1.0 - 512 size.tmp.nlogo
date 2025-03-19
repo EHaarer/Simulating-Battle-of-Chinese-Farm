@@ -1,8 +1,20 @@
 ;; =====================
-;; GLOBALS (modified)
+;; COMBINED CODE (512 x 512, patch-size 2)
+;; =====================
+
 globals [
   battlefield-width
   battlefield-height
+
+  ;; Terrain counters (from first file)
+  water-patches
+  canal-bank-patches
+  sandy-patches
+  desert-patches
+  road-patches
+  chinese-farm-patches
+
+  ;; Q-learning globals (from second file)
   q-tables-israeli
   q-tables-egyptian
   i-alpha
@@ -13,16 +25,17 @@ globals [
   e-epsilon
   kill-prob
   group-counter
-  chinese-farm-patches
   chinese-farm-center
   strategic-locations
-  bridgehead-zone  ;; Added global variable for the bridgehead zone
+  bridgehead-zone  ;; For the horizontal bridgehead zone
 ]
 
 breed [israeli-tanks israeli-tank]
 breed [egyptian-tanks egyptian-tank]
 breed [infantry soldier]
+
 patches-own [
+  final-color
   terrain-type
   captured-by
   is-strategic
@@ -31,27 +44,35 @@ patches-own [
   control-time
   fortified?
   mine?
-  bridgehead?  ;; Added patch property for identifying the bridgehead zone
+  bridgehead?
 ]
+
 turtles-own [
   state
   action
   team
   group-id
   defense-center  ;; Used for Egyptian defensive positioning
-  last-state      ;; NEW: Stores the last state (position) for death penalty updates
-  last-action     ;; NEW: Stores the last chosen action for death penalty updates
+  last-state      ;; For death penalty updates
+  last-action     ;; For death penalty updates
 ]
 
 ;------------------------------------------------
-; SETUP PROCEDURES
+; SETUP
 ;------------------------------------------------
 to setup
   clear-all
-  set battlefield-width 100
-  set battlefield-height 100
+
+  ;; --------------------------------------------
+  ;; 1) WORLD SIZE: 512 x 512
+  ;; 2) PATCH SIZE: 2
+  ;; --------------------------------------------
+  set battlefield-width 512
+  set battlefield-height 512
   resize-world 0 (battlefield-width - 1) 0 (battlefield-height - 1)
-  set-patch-size 5
+  set-patch-size 2
+
+  ;; Initialize Q-learning parameters
   set i-alpha 0.5
   set i-gamma 0.5
   set i-epsilon 0.5
@@ -62,206 +83,279 @@ to setup
   set q-tables-israeli []
   set q-tables-egyptian []
   set group-counter 0
-  set chinese-farm-patches []
   set strategic-locations []
-  setup-terrain
+
+  ;; -------------------------------------------------------
+  ;; TERRAIN SETUP
+  ;;  - Initialize all patches as sandy/desert-west FIRST
+  ;; -------------------------------------------------------
+  set water-patches 0
+  set canal-bank-patches 0
+  set sandy-patches 0
+  set desert-patches 0
+  set road-patches 0
+  set chinese-farm-patches 0
+
+  ;; Step A: Initialize everything to sandy color + desert-west
+  ask patches [
+    set final-color [230 239 184]  ;; sandy color
+    set terrain-type "desert-west"
+    set captured-by ""
+    set is-strategic false
+    set fortified? false
+    set mine? false
+    set bridgehead? false
+    set defensive-bonus 0
+    set control-time 0
+    set strategic-value 0
+  ]
+
+  ;; Step B: Process each mask in turn
+  set water-patches          process-mask "./Images/terrain_masks/water_mask.png"          [212 240 254]
+  set canal-bank-patches     process-mask "./Images/terrain_masks/canal-bank_mask.png"     [208 229 172]
+  set sandy-patches          process-mask "./Images/terrain_masks/sandy_mask.png"          [230 239 184]
+  set desert-patches         process-mask "./Images/terrain_masks/desert_mask.png"         [255 229 202]
+  set road-patches           process-mask "./Images/terrain_masks/road_mask.png"           [ 66  66  66]
+  set chinese-farm-patches   process-mask "./Images/terrain_masks/chinese-farm_mask.png"   [  0 255   0]
+
+  ;; Step C: Assign final pcolor to each patch & set terrain-type if changed
+  ask patches [
+    set pcolor final-color
+
+    if final-color = [212 240 254] [
+      set terrain-type "water"
+    ]
+    if final-color = [208 229 172] [  ;; canal-bank
+      set terrain-type "desert-west"
+    ]
+    if final-color = [230 239 184] [  ;; sandy
+      set terrain-type "desert-west"
+    ]
+    if final-color = [255 229 202] [  ;; desert
+      set terrain-type "desert-west"
+    ]
+    if final-color = [ 66  66  66] [
+      set terrain-type "road"
+    ]
+    if final-color = [  0 255   0] [
+      set terrain-type "chinese-farm"
+      set captured-by "none"
+    ]
+  ]
+
+  ;; Identify the set of Chinese Farm patches
+  set chinese-farm-patches patches with [ terrain-type = "chinese-farm" ]
+
+  ;; Arbitrary reference center for Chinese Farm (same concept):
+  set chinese-farm-center patch 40 50
+
+  ;; ------------------------------------------------------------
+  ;; 3) NEW STRATEGIC LOCATIONS (SCALED)
+  ;;    Old: (405,916), (416,715), (530,442)
+  ;;    New: (202,458), (208,358), (265,221)
+  ;; ------------------------------------------------------------
   setup-strategic-locations
-  setup-bridgehead-zone         ;; NEW: Setup the horizontal bridgehead line
+
+  ;; Define the bridgehead zone (unchanged)
+  setup-bridgehead-zone
+
+  ;; Setup Egyptian forces at the scaled strategic coords
   setup-egyptian-troops-on-strategic
+
+  ;; Setup rest of the second file’s logic
   setup-units
   setup-fortified-lines
   setup-mines
-  setup-israeli-attackers-southeast
+
   reset-ticks
+
+  ;; Show final counts (optional)
+  show (word "Number of water patches assigned: " water-patches)
+  show (word "Number of canal-bank patches assigned: " canal-bank-patches)
+  show (word "Number of sandy patches assigned: " sandy-patches)
+  show (word "Number of desert patches assigned: " desert-patches)
+  show (word "Number of road patches assigned: " road-patches)
+  show (word "Number of Chinese farm patches assigned: " chinese-farm-patches)
 end
 
-;; =====================
-;; NEW: Setup Bridgehead Procedure (Horizontal Line on South Edge)
+
+;------------------------------------------------
+; process-mask (unchanged from before)
+;------------------------------------------------
+to-report process-mask [mask-file rgb-list]
+  import-pcolors mask-file
+  let assigned 0
+  ask patches [
+    if pcolor = white [
+      set final-color rgb-list
+      set assigned assigned + 1
+    ]
+  ]
+  report assigned
+end
+
+;------------------------------------------------
+; Setup the Bridgehead Zone (unchanged)
+;------------------------------------------------
 to setup-bridgehead-zone
   set bridgehead-zone patches with [ terrain-type = "chinese-farm" and pycor >= 20 and pycor <= 23 ]
   ask bridgehead-zone [
     set pcolor magenta
     set bridgehead? true
-    set strategic-value 15  ;; Different from the regular Chinese Farm
+    set strategic-value 15
   ]
 end
 
-to setup-egyptian-troops-on-strategic
-  ;; Strategic Location 1: (30,65)
-  create-egyptian-tanks 60 [
-    set group-id group-counter
-    set team "egyptian"
-    set shape "triangle"
-    set color 25
-    setxy 30 40
-    set state (list xcor ycor)
-    set action "hold-position"
-    set size 1.5
-  ]
-  set group-counter group-counter + 1
-  create-infantry 50 [
-    set group-id group-counter
-    set team "egyptian"
-    set shape "person"
-    set color 15
-    setxy 30 40
-    set state (list xcor ycor)
-    set action "hold-position"
-    set size 1.5
-  ]
-  set group-counter group-counter + 1
-
-  ;; Strategic Location 2: (40,40)
-  create-egyptian-tanks 50 [
-    set group-id group-counter
-    set team "egyptian"
-    set shape "triangle"
-    set color 25
-    setxy 50 50
-    set state (list xcor ycor)
-    set action "hold-position"
-    set size 1.5
-  ]
-  set group-counter group-counter + 1
-  create-infantry 40 [
-    set group-id group-counter
-    set team "egyptian"
-    set shape "person"
-    set color 15
-    setxy 50 50
-    set state (list xcor ycor)
-    set action "hold-position"
-    set size 1.5
-  ]
-  set group-counter group-counter + 1
-
-  ;; Strategic Location 3: (50,25)
-  create-egyptian-tanks 40 [
-    set group-id group-counter
-    set team "egyptian"
-    set shape "triangle"
-    set color 25
-    setxy 50 70
-    set state (list xcor ycor)
-    set action "hold-position"
-    set size 1.5
-  ]
-  set group-counter group-counter + 1
-  create-infantry 35 [
-    set group-id group-counter
-    set team "egyptian"
-    set shape "person"
-    set color 15
-    setxy 50 70
-    set state (list xcor ycor)
-    set action "hold-position"
-    set size 1.5
-  ]
-  set group-counter group-counter + 1
-end
-
-to setup-israeli-attackers-southeast
-  ;; Israeli Attackers: Tanks in the southeast region
-  repeat 18 [
-    let cluster-x (70 + random 10)  ;; x between 80 and 89
-    let cluster-y (20 + random 20)     ;; y between 0 and 19
-    create-israeli-tanks 5 [
-      set group-id group-counter
-      set team "israeli"
-      set shape "circle"
-      set color 135
-      setxy cluster-x cluster-y
-      set state (list xcor ycor)
-      set action ""
-    ]
-    set group-counter group-counter + 1
-  ]
-
-  ;; Israeli Attackers: Infantry in the southeast region
-  repeat 18 [
-    let cluster-x (70 + random 10)
-    let cluster-y (20 + random 20)
-    create-infantry 5 [
-      set group-id group-counter
-      set team "israeli"
-      set shape "person"
-      set color 0
-      setxy cluster-x cluster-y
-      set state (list xcor ycor)
-      set action ""
-    ]
-    set group-counter group-counter + 1
-  ]
-end
-
-to setup-terrain
-  ask patches [
-    set terrain-type "desert-west"
-    set pcolor yellow
-    set is-strategic false
-    set fortified? false
-    set mine? false     ;; Initialize mine? to false for every patch
-  ]
-  ;; Add a vertical blue line (for visual reference)
-  ask patches with [pxcor <= 20 and pxcor >= 19] [
-    set pcolor blue
-  ]
-  ;; Define the Chinese Farm as a rectangle to the right of the blue line
-  ask patches with [pxcor > 20 and pxcor <= 60 and pycor >= 20 and pycor <= 80] [
-    set terrain-type "chinese-farm"
-    set pcolor green
-    set captured-by "none"
-  ]
-  set chinese-farm-patches patches with [terrain-type = "chinese-farm"]
-  ;; Set the center of the Chinese Farm
-  let center-x 40
-  let center-y 50
-  set chinese-farm-center patch center-x center-y
-  ;; Add roads
-  ask patches with [pycor = 30 and pxcor > 20] [
-    set terrain-type "road"
-    set pcolor gray
-  ]
-  ask patches with [pxcor = 40] [
-    set terrain-type "road"
-    set pcolor gray
-  ]
-end
-
-;; NEW: Setup strategic locations within the Chinese Farm
+;------------------------------------------------
+; Setup the three strategic locations at half coords
+;   (202,458), (208,358), (265,221)
+;------------------------------------------------
 to setup-strategic-locations
-  ;; Create 3 strategic locations (3x3 patches each)
-  ;; Location 1: Northern high ground
-  create-strategic-location 30 40
-
-  ;; Location 2: Central crossroads
-  create-strategic-location 50 50
-
-  ;; Location 3: Southern water source
-  create-strategic-location 50 70
+  create-strategic-location 202 458
+  create-strategic-location 208 358
+  create-strategic-location 265 221
 end
 
-;; NEW: Helper procedure to create a 3x3 strategic location
 to create-strategic-location [x y]
   let location-patches patches with [
     pxcor >= (x - 1) and pxcor <= (x + 1) and
     pycor >= (y - 1) and pycor <= (y + 1) and
     terrain-type = "chinese-farm"
   ]
-
   ask location-patches [
     set is-strategic true
-    set pcolor violet ;; Mark strategic locations with a distinctive color
+    set pcolor violet
+    set strategic-value 5
   ]
-
   set strategic-locations (patch-set strategic-locations location-patches)
 end
 
+;;------------------------------------------------
+;; Setup Egyptian Troops on the new strategic coords
+;;   (202, 458), (208, 358), (265, 221)
+;;------------------------------------------------
+;to setup-egyptian-troops-on-strategic
+;
+;  ;; Strategic Location 1: (202,458)
+;  create-egyptian-tanks 60 [
+;    set group-id group-counter
+;    set team "egyptian"
+;    set shape "triangle"
+;    set color 25
+;    setxy 202 458
+;    set state (list xcor ycor)
+;    set action "hold-position"
+;    set size 1.5
+;  ]
+;  set group-counter group-counter + 1
+;
+;  create-infantry 50 [
+;    set group-id group-counter
+;    set team "egyptian"
+;    set shape "person"
+;    set color 15
+;    setxy 202 458
+;    set state (list xcor ycor)
+;    set action "hold-position"
+;    set size 1.5
+;  ]
+;  set group-counter group-counter + 1
+;
+;  ;; Strategic Location 2: (208,358)
+;  create-egyptian-tanks 50 [
+;    set group-id group-counter
+;    set team "egyptian"
+;    set shape "triangle"
+;    set color 25
+;    setxy 208 358
+;    set state (list xcor ycor)
+;    set action "hold-position"
+;    set size 1.5
+;  ]
+;  set group-counter group-counter + 1
+;
+;  create-infantry 40 [
+;    set group-id group-counter
+;    set team "egyptian"
+;    set shape "person"
+;    set color 15
+;    setxy 208 358
+;    set state (list xcor ycor)
+;    set action "hold-position"
+;    set size 1.5
+;  ]
+;  set group-counter group-counter + 1
+;
+;  ;; Strategic Location 3: (265,221)
+;  create-egyptian-tanks 40 [
+;    set group-id group-counter
+;    set team "egyptian"
+;    set shape "triangle"
+;    set color 25
+;    setxy 265 221
+;    set state (list xcor ycor)
+;    set action "hold-position"
+;    set size 1.5
+;  ]
+;  set group-counter group-counter + 1
+;
+;  create-infantry 35 [
+;    set group-id group-counter
+;    set team "egyptian"
+;    set shape "person"
+;    set color 15
+;    setxy 265 221
+;    set state (list xcor ycor)
+;    set action "hold-position"
+;    set size 1.5
+;  ]
+;  set group-counter group-counter + 1
+;end
+
+to setup-egyptian-troops-on-strategic
+  ;; e.g., one big batch of 60 tanks around (200,350)
+  create-egyptian-tanks 60 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "triangle"
+    set color 25
+    ;; random within ±20 of (200,350)
+    let rx (200 - 20 + random 41)
+    let ry (350 - 20 + random 41)
+    setxy rx ry
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+
+  ;; e.g., another batch of 50 infantry around the same region
+  create-infantry 50 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "person"
+    set color 15
+    let rx (200 - 20 + random 41)
+    let ry (350 - 20 + random 41)
+    setxy rx ry
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+end
+
+;------------------------------------------------
+; Setup Israeli Units, Fortifications, Mines, etc.
+; (unchanged from the second file)
+;------------------------------------------------
 to setup-units
-  ;; Israeli Tanks: 5 groups of 5 (total 25 tanks)
+  ;; Israeli Tanks: 5 groups of 5
   repeat 10 [
-    let cluster-x (25 + random 15)
-    let cluster-y (5 + random 5)
+;    let cluster-x (25 + random 15)
+;    let cluster-y (5 + random 5)
+     let cluster-x (300 - 15 + random 31)  ; random integer in [285..315]
+     let cluster-y (00 - 15 + random 31)  ; random integer in [185..215]
     create-israeli-tanks 5 [
       set group-id group-counter
       set team "israeli"
@@ -273,10 +367,13 @@ to setup-units
     ]
     set group-counter group-counter + 1
   ]
-  ;; Israeli Infantry: 5 groups of 5 (total 25 infantry)
+
+  ;; Israeli Infantry: 5 groups of 5
   repeat 5 [
-    let cluster-x (25 + random 15)
-    let cluster-y (5 + random 5)
+;    let cluster-x (25 + random 15)
+;    let cluster-y (5 + random 5)
+     let cluster-x (300 - 15 + random 31)
+     let cluster-y (200 - 15 + random 31)
     create-infantry 5 [
       set group-id group-counter
       set team "israeli"
@@ -290,9 +387,6 @@ to setup-units
   ]
 end
 
-;------------------------------------------------
-; MAIN LOOP
-;------------------------------------------------
 to go
   ask israeli-tanks [ q-learn-move-israeli ]
   ask egyptian-tanks [ q-learn-move-egyptian ]
@@ -1454,13 +1548,13 @@ to check-landmines
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-210
+278
 10
-718
-519
+1310
+1043
 -1
 -1
-5.0
+2.0
 1
 10
 1
@@ -1471,22 +1565,22 @@ GRAPHICS-WINDOW
 1
 1
 0
-99
+511
 0
-99
-1
-1
+511
+0
+0
 1
 ticks
 30.0
 
 BUTTON
-40
-73
-106
-106
+25
+98
+88
+131
 NIL
-Setup
+setup
 NIL
 1
 T
@@ -1498,12 +1592,12 @@ NIL
 1
 
 BUTTON
-65
-160
-128
-193
+25
+145
+88
+178
 NIL
-Go
+go
 T
 1
 T
@@ -1515,10 +1609,10 @@ NIL
 1
 
 PLOT
-855
-188
-1055
-338
+24
+204
+224
+354
 Israeli vs Egyptian
 NIL
 NIL
@@ -1531,7 +1625,7 @@ false
 "" ""
 PENS
 "default" 1.0 0 -15637942 true "" "plot count turtles with [team = \"israeli\"]"
-"pen-1" 1.0 0 -5825686 true "" "plot count turtles with [team = \"egyptian\"]"
+"pen-1" 1.0 0 -7500403 true "" "plot count turtles with [team = \"egyptian\"]"
 
 @#$#@#$#@
 ## WHAT IS IT?

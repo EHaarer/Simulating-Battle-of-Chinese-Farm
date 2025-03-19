@@ -1,13 +1,93 @@
+; ---------------------------------------
+;  Custom terrain reconstruction in NetLogo
+; ---------------------------------------
 
+globals [ ;terraintypes
+  water-patches
+  canal-bank-patches
+  sandy-patches
+  desert-patches
+  road-patches
+  chinese-farm-patches  ; New terrain type
+]
+
+patches-own [
+  final-color
+]
+
+to setup
+  clear-all
+
+  ; Make sure the world is 1024x1024 with patch-size 1
+  resize-world 0 511 0 255
+  set-patch-size 1
+
+  ; Initialize counters
+  set water-patches 0
+  set canal-bank-patches 0
+  set sandy-patches 0
+  set desert-patches 0
+  set road-patches 0
+  set chinese-farm-patches 0  ; Initialize new terrain type counter
+
+  ; Initialize each patch’s final color to black
+  ask patches [
+    set final-color black
+  ]
+
+  ; Process each mask in turn. The procedure returns
+  ; how many patches turned white in that mask. We store
+  ; that final color in `final-color`.
+  set water-patches       process-mask "./Images/terrain_masks/water_mask.png"       [212 240 254]
+  set canal-bank-patches  process-mask "./Images/terrain_masks/canal-bank_mask.png"  [208 229 172]
+  set sandy-patches       process-mask "./Images/terrain_masks/sandy_mask.png"       [230 239 184]
+  set desert-patches      process-mask "./Images/terrain_masks/desert_mask.png"      [255 229 202]
+  set road-patches        process-mask "./Images/terrain_masks/road_mask.png"        [ 66  66  66]
+  set chinese-farm-patches process-mask "./Images/terrain_masks/chinese-farm_mask.png" [0 255 0] ; New mask in green
+
+  ; Now actually display those final colors on each patch
+  ask patches [
+    set pcolor final-color
+  ]
+
+  ; Output the final counts to the Command Center
+  show (word "Number of water patches assigned: " water-patches)
+  show (word "Number of canal-bank patches assigned: " canal-bank-patches)
+  show (word "Number of sandy patches assigned: " sandy-patches)
+  show (word "Number of desert patches assigned: " desert-patches)
+  show (word "Number of road patches assigned: " road-patches)
+  show (word "Number of Chinese farm patches assigned: " chinese-farm-patches)  ; New output
+end
+
+
+; ---------------------------------------------------------
+; process-mask
+;   - Imports the mask image with import-pcolors
+;   - Every patch that sees "white" sets final-color
+;   - Returns the number of patches that changed.
+; ---------------------------------------------------------
+to-report process-mask [mask-file rgb-list]
+  import-pcolors mask-file
+
+  let assigned 0
+  ask patches [
+    if pcolor = white [
+      set final-color rgb-list
+      set assigned assigned + 1
+    ]
+  ]
+
+  report assigned
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-210
-10
-718
-519
+140
+12
+404
+277
 -1
 -1
-5.0
+1.0
 1
 10
 1
@@ -18,22 +98,22 @@ GRAPHICS-WINDOW
 1
 1
 0
-99
+255
 0
-99
-1
-1
+255
+0
+0
 1
 ticks
 30.0
 
 BUTTON
-40
-73
-106
-106
-NIL
-Setup
+26
+18
+89
+51
+setup
+setup
 NIL
 1
 T
@@ -43,42 +123,6 @@ NIL
 NIL
 NIL
 1
-
-BUTTON
-65
-160
-128
-193
-NIL
-Go
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-PLOT
-855
-188
-1055
-338
-Israeli vs Egyptian
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -15637942 true "" "plot count turtles with [team = \"israeli\"]"
-"pen-1" 1.0 0 -5825686 true "" "plot count turtles with [team = \"egyptian\"]"
 
 @#$#@#$#@
 ## WHAT IS IT?

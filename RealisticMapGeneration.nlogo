@@ -1,78 +1,90 @@
-extensions [csv]
+; ---------------------------------------
+;  Custom terrain reconstruction in NetLogo
+; ---------------------------------------
 
-globals [ battlefield-width battlefield-height ]
+globals [ ;terraintypes
+  water-patches
+  canal-bank-patches
+  sandy-patches
+  desert-patches
+  road-patches
+  chinese-farm-patches  ; New terrain type
+]
 
 patches-own [
-  terrain-type
+  final-color
 ]
 
 to setup
   clear-all
-  set battlefield-width 643  ;; Scale up by 2x
-  set battlefield-height 643
-  resize-world 0 (battlefield-width - 1) 0 (battlefield-height - 1)
+
+  ; Make sure the world is 1024x1024 with patch-size 1
+  resize-world 0 1023 0 1023
   set-patch-size 1
 
-  ;; Load the image and scale it up
-  import-pcolors "./Images/roads-map-final-processed.png"
+  ; Initialize counters
+  set water-patches 0
+  set canal-bank-patches 0
+  set sandy-patches 0
+  set desert-patches 0
+  set road-patches 0
+  set chinese-farm-patches 0  ; Initialize new terrain type counter
 
-  ;; Assign terrain types based on a range of color values
-;  ask patches [
-;    let rgb-list convert-pcolor-to-rgb pcolor
-;    let r item 0 rgb-list
-;    let g item 1 rgb-list
-;    let b item 2 rgb-list
-;
-;    ;; Road: Any patch where R, G, and B are all below 50
-;    if (r < 50 and g < 50 and b < 50) [
-;      set terrain-type "road"
-;      set pcolor gray
-;    ]
-;    ;; Suez Canal: Any patch where R is between 180-230, G is between 220-250, B is between 220-255
-;    if (r >= 70 and r <= 90 and g >= 70 and g <= 90 and b >= 245 and b <= 255) [
-;      set terrain-type "suez-canal"
-;      set pcolor blue
-;    ]
-;    ;; Desert: Any patch where R is between 170-200, G is between 230-255, B is between 50-100
-;    if (r >= 245 and r <= 255 and g >= 245 and g <= 255 and b >= 50 and b <= 70) [
-;      set terrain-type "desert-west"
-;      set pcolor yellow
-;    ]
-;    if not (r < 50 and g < 50 and b < 50) and not (r >= 180 and r <= 230 and g >= 220 and g <= 250 and b >= 220 and b <= 255) and not (r >= 170 and r <= 200 and g >= 230 and g <= 255 and b >= 50 and b <= 100) [
-;      ;; Default to desert if no match
-;      set terrain-type "desert-west"
-;      set pcolor yellow
-;    ]
-;  ]
+  ; Initialize each patch’s final color to black
+  ask patches [
+    set final-color black
+  ]
 
-  reset-ticks
+  ; Process each mask in turn. The procedure returns
+  ; how many patches turned white in that mask. We store
+  ; that final color in `final-color`.
+  set water-patches       process-mask "./Images/terrain_masks/water_mask.png"       [212 240 254]
+  set canal-bank-patches  process-mask "./Images/terrain_masks/canal-bank_mask.png"  [208 229 172]
+  set sandy-patches       process-mask "./Images/terrain_masks/sandy_mask.png"       [230 239 184]
+  set desert-patches      process-mask "./Images/terrain_masks/desert_mask.png"      [255 229 202]
+  set road-patches        process-mask "./Images/terrain_masks/road_mask.png"        [ 66  66  66]
+  set chinese-farm-patches process-mask "./Images/terrain_masks/chinese-farm_mask.png" [0 255 0] ; New mask in green
+
+  ; Now actually display those final colors on each patch
+  ask patches [
+    set pcolor final-color
+  ]
+
+  ; Output the final counts to the Command Center
+  show (word "Number of water patches assigned: " water-patches)
+  show (word "Number of canal-bank patches assigned: " canal-bank-patches)
+  show (word "Number of sandy patches assigned: " sandy-patches)
+  show (word "Number of desert patches assigned: " desert-patches)
+  show (word "Number of road patches assigned: " road-patches)
+  show (word "Number of Chinese farm patches assigned: " chinese-farm-patches)  ; New output
 end
 
-;; Dummy function for extracting RGB lists (Replace with actual NetLogo function if needed)
-;to-report convert-pcolor-to-rgb [pcolor-value]
-;  let base-color round pcolor-value
-;
-;  ;; Approximate RGB values based on NetLogo color scale
-;  if base-color = 0      [ report (list 0 0 0) ]      ;; Black
-;  if base-color = 9.9    [ report (list 28 28 28) ]  ;; Dark gray
-;  if base-color = 15     [ report (list 255 0 0) ]    ;; Red
-;  if base-color = 25     [ report (list 255 165 0) ]  ;; Orange
-;  if base-color = 35     [ report (list 255 255 0) ]  ;; Yellow
-;  if base-color = 45     [ report (list 0 255 0) ]    ;; Green
-;  if base-color = 55     [ report (list 0 255 255) ]  ;; Cyan
-;  if base-color = 65     [ report (list 0 0 255) ]    ;; Blue
-;  if base-color = 75     [ report (list 255 0 255) ]  ;; Magenta
-;  if base-color = 85     [ report (list 255 255 255) ];; White
-;
-;  ;; Default to white if unknown color
-;  report (list 255 255 255)
-;end
+
+; ---------------------------------------------------------
+; process-mask
+;   - Imports the mask image with import-pcolors
+;   - Every patch that sees "white" sets final-color
+;   - Returns the number of patches that changed.
+; ---------------------------------------------------------
+to-report process-mask [mask-file rgb-list]
+  import-pcolors mask-file
+
+  let assigned 0
+  ask patches [
+    if pcolor = white [
+      set final-color rgb-list
+      set assigned assigned + 1
+    ]
+  ]
+
+  report assigned
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 140
 12
-791
-664
+1172
+1045
 -1
 -1
 1.0
@@ -86,9 +98,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-642
+1023
 0
-642
+1023
 0
 0
 1
