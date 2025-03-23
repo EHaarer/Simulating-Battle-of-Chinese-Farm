@@ -52,12 +52,12 @@ to setup
   set battlefield-height 100
   resize-world 0 (battlefield-width - 1) 0 (battlefield-height - 1)
   set-patch-size 5
-  set i-alpha 0.5
+  set i-alpha 0.6
   set i-gamma 0.5
-  set i-epsilon 0.5
-  set e-alpha 0.4
-  set e-gamma 0.4
-  set e-epsilon 0.4
+  set i-epsilon 0.3
+  set e-alpha 0.3
+  set e-gamma 0.3
+  set e-epsilon 0.3
   set kill-prob 0.5
   set q-tables-israeli []
   set q-tables-egyptian []
@@ -162,10 +162,10 @@ end
 
 to setup-israeli-attackers-southeast
   ;; Israeli Attackers: Tanks in the southeast region
-  repeat 18 [
+  repeat 10 [
     let cluster-x (70 + random 10)  ;; x between 80 and 89
     let cluster-y (20 + random 20)     ;; y between 0 and 19
-    create-israeli-tanks 5 [
+    create-israeli-tanks 10 [
       set group-id group-counter
       set team "israeli"
       set shape "circle"
@@ -178,10 +178,10 @@ to setup-israeli-attackers-southeast
   ]
 
   ;; Israeli Attackers: Infantry in the southeast region
-  repeat 18 [
+  repeat 10 [
     let cluster-x (70 + random 10)
     let cluster-y (20 + random 20)
-    create-infantry 5 [
+    create-infantry 10 [
       set group-id group-counter
       set team "israeli"
       set shape "person"
@@ -1298,10 +1298,10 @@ to penalize-death
 end
 
 to grid-search
-  ;; Define parameter ranges for Israeli learning parameters.
-  let e-alpha-values [0.2 0.5 0.8]
+  ;; Define parameter ranges for Egyptian learning parameters.
+  let e-alpha-values [0.1 0.5 0.9]
   let e-gamma-values [0.2 0.5 0.8]
-  let e-epsilon-values [0.2 0.5 0.8]
+  let e-epsilon-values [0.1 0.5 0.9]
 
   ;; Create an empty list to store results.
   let results []
@@ -1310,12 +1310,12 @@ to grid-search
   foreach e-alpha-values [ ea ->
     foreach e-gamma-values [ eg ->
       foreach e-epsilon-values [ ee ->
-        ;; Create an empty list to store the 5 trial outcomes.
+        ;; Create an empty list to store the trial outcomes.
         let trial-results []
 
         ;; Run each combination 5 times.
-        repeat 3 [
-          ;; Set the model parameters.
+        repeat 5 [
+          ;; Set the Egyptian learning parameters.
           set e-alpha ea
           set e-gamma eg
           set e-epsilon ee
@@ -1328,17 +1328,32 @@ to grid-search
             go
           ]
 
-          ;; At the end, count the remaining units for each side.
+          ;; Calculate metrics at the end of the simulation.
           let israeli-count count turtles with [team = "israeli"]
           let egyptian-count count turtles with [team = "egyptian"]
 
-          ;; Determine the winner based on which side has more units left.
-          let winner (ifelse-value (israeli-count > egyptian-count)
+          ;; Bridgehead control: Percentage of bridgehead zone controlled by Israelis.
+          let bridgehead-patches count bridgehead-zone with [captured-by = "israeli"]
+          let bridgehead-control (bridgehead-patches / count bridgehead-zone) * 100
+
+          ;; Egyptian response: Number of Israeli units destroyed near the bridgehead.
+          let israeli-losses count turtles with [
+            team = "israeli" and
+            last-state != [] and
+            member? patch (item 0 last-state) (item 1 last-state) bridgehead-zone
+          ]
+
+          ;; Territorial control: Percentage of Chinese Farm controlled by each side.
+          let israeli-territory (count patches with [terrain-type = "chinese-farm" and captured-by = "israeli"] / count chinese-farm-patches) * 100
+          let egyptian-territory (count patches with [terrain-type = "chinese-farm" and captured-by = "egyptian"] / count chinese-farm-patches) * 100
+
+          ;; Determine the winner based on bridgehead control and unit counts.
+          let winner (ifelse-value (bridgehead-control > 50 and israeli-count > egyptian-count)
                           ["israeli"]
                           ["egyptian"])
 
           ;; Store the result of this trial.
-          set trial-results lput (list israeli-count egyptian-count winner) trial-results
+          set trial-results lput (list israeli-count egyptian-count bridgehead-control israeli-losses israeli-territory egyptian-territory winner) trial-results
         ]
 
         ;; Store the results for the current parameter combination.
