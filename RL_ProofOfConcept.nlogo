@@ -52,9 +52,9 @@ to setup
   set battlefield-height 100
   resize-world 0 (battlefield-width - 1) 0 (battlefield-height - 1)
   set-patch-size 5
-  set i-alpha 0.6
+  set i-alpha 0.8
   set i-gamma 0.5
-  set i-epsilon 0.3
+  set i-epsilon 0.1
   set e-alpha 0.3
   set e-gamma 0.3
   set e-epsilon 0.3
