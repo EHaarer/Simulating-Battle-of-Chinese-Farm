@@ -902,13 +902,13 @@ end
 ; ACTION SELECTION & Q-VALUE LOOKUPS
 ;------------------------------------------------
 to-report choose-action-israeli [s]
-  if ticks < 50 [
+  if ticks < 75 [
     if (random-float 1 < i-epsilon) [
       report one-of ["move-north" "move-south" "move-east" "move-west"]
     ]
     report max-arg-group s group-id "israeli"
   ]
-  if ticks >= 50 [
+  if ticks >= 75 [
     if (random-float 1 < i-epsilon) [
       report one-of ["move-north" "move-south" "move-east" "move-west" "protect bridgehead"]
     ]
@@ -1211,7 +1211,7 @@ to capture-chinese-farm
       ask patch-here [
         if terrain-type = "chinese-farm" [
           if not fortified? [
-            if ticks >= 100 and member? self bridgehead-zone [
+            if ticks >= 75 and member? self bridgehead-zone [
               set captured-by "egyptian"
               set pcolor turquoise ;; Egyptian bridgehead color stays turquoise
               set control-time 0
@@ -1237,7 +1237,7 @@ end
 to reinforce-chinese-farm
   ;; --- Egyptian Tanks ---
   ask egyptian-tanks [
-    if ticks >= 100 [
+    if ticks >= 75 [
       ifelse any? bridgehead-zone with [ captured-by != "egyptian" ] in-radius 20 [
         let target min-one-of bridgehead-zone with [ captured-by != "egyptian" ] [ distance myself ]
         if target != nobody [
@@ -1267,7 +1267,7 @@ to reinforce-chinese-farm
         ]
       ]
     ]
-    if ticks < 100 [
+    if ticks < 75 [
       ;; Standard behavior before tick 20
       ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
         let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
@@ -1292,7 +1292,7 @@ to reinforce-chinese-farm
 
   ;; --- Egyptian Infantry ---
   ask infantry with [ team = "egyptian" ] [
-    if ticks >= 100 [
+    if ticks >= 75 [
       ifelse any? bridgehead-zone with [ captured-by != "egyptian" ] in-radius 15 [
         let target min-one-of bridgehead-zone with [ captured-by != "egyptian" ] [ distance myself ]
         if target != nobody [
@@ -1320,7 +1320,7 @@ to reinforce-chinese-farm
         ]
       ]
     ]
-    if ticks < 100 [
+    if ticks < 75 [
       ;; Standard behavior before tick 20
       ifelse any? turtles with [ team = "israeli" ] in-radius 7 [
         let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
@@ -1645,7 +1645,7 @@ end
 to setup-mines
   ask patches with [ terrain-type = "chinese-farm" ] [
     if pycor < 310 and pxcor < 325 [
-      if random-float 1 < 0.0 [  ;; 4% chance for patches below y=50
+      if random-float 1 < 0.03 [  ;; 4% chance for patches below y=50
         set mine? true
         set pcolor red
       ]
@@ -1751,6 +1751,25 @@ false
 PENS
 "Israel" 1.0 0 -15637942 true "" "plot count turtles with [team = \"israeli\"]"
 "Egyptian" 1.0 0 -13345367 true "" "plot count turtles with [team = \"egyptian\"]"
+
+PLOT
+85
+430
+285
+580
+Bridgehead Control
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"let bh-israeli count bridgehead-zone with [captured-by = \"israeli\"]\nlet bh-egyptian count bridgehead-zone with [captured-by = \"egyptian\"]" "let bh-israeli count bridgehead-zone with [captured-by = \"israeli\"]\nlet bh-egyptian count bridgehead-zone with [captured-by = \"egyptian\"]"
+PENS
+"Israeli bh" 1.0 0 -13840069 true " let bh-total count bridgehead-zone\n let bh-israeli count bridgehead-zone with [captured-by = \"israeli\"]\n let bh-israeli-pct bh-israeli / max (list 1 bh-total)  ;; Avoid division by zero" " let bh-total count bridgehead-zone\n let bh-israeli count bridgehead-zone with [captured-by = \"israeli\"]\n let bh-israeli-pct bh-israeli / max (list 1 bh-total)"
+"Egyptian bh" 1.0 0 -1664597 true "let bh-total count bridgehead-zone\nlet bh-egyptian count bridgehead-zone with [captured-by = \"egyptian\"]\nlet bh-egyptian-pct bh-egyptian / max (list 1 bh-total)" "let bh-total count bridgehead-zone\nlet bh-egyptian count bridgehead-zone with [captured-by = \"egyptian\"]\nlet bh-egyptian-pct bh-egyptian / max (list 1 bh-total)"
 
 @#$#@#$#@
 ## WHAT IS IT?
