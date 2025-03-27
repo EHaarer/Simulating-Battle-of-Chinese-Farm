@@ -96,6 +96,7 @@ to setup
   set road-patches 0
   set chinese-farm-patches 0
 
+
   ;; Step A: Initialize everything to sandy color + desert-west
   ask patches [
     set final-color [230 239 184]  ;; sandy color
@@ -142,6 +143,7 @@ to setup
       set captured-by "none"
     ]
   ]
+
 
   ;; Identify the set of Chinese Farm patches
   set chinese-farm-patches patches with [ terrain-type = "chinese-farm" ]
@@ -198,12 +200,48 @@ end
 ; Setup the Bridgehead Zone (unchanged)
 ;------------------------------------------------
 to setup-bridgehead-zone
-  set bridgehead-zone patches with [ terrain-type = "chinese-farm" and pycor >= 20 and pycor <= 23 ]
-  ask bridgehead-zone [
-    set pcolor magenta
-    set bridgehead? true
-    set strategic-value 15
+   set bridgehead-zone patches with [
+     ; Custom polygon check with terrain type filter
+     terrain-type = "chinese-farm" and
+     in-polygon?
+     (list
+       (list 192 288)  ; First point
+       (list 261 340)  ; Second point
+       (list 276 315)  ; Third point
+       (list 210 252)  ; Fourth point
+     )
+   ]
+   ask bridgehead-zone [
+     set pcolor magenta
+     set bridgehead? true
+     set strategic-value 15
+   ]
+end
+
+to-report in-polygon? [polygon]
+  let x pxcor
+  let y pycor
+  let inside? false
+  let j (length polygon) - 1
+
+  foreach range (length polygon) [ i ->
+    let l item i polygon
+    let pj item j polygon
+
+    let xi item 0 l
+    let yi item 1 l
+    let xj item 0 pj
+    let yj item 1 pj
+
+    let intersect
+      ((yi > y) != (yj > y)) and
+      (x < (xj - xi) * (y - yi) / (yj - yi) + xi)
+
+    if intersect [ set inside? (not inside?) ]
+    set j i
   ]
+
+  report inside?
 end
 
 ;------------------------------------------------
@@ -396,8 +434,8 @@ to go
   reinforce-chinese-farm
   check-win-condition
   check-landmines
-  show (word "Israeli Units: " count turtles with [team = "israeli"])
-  show (word "Egyptian Units: " count turtles with [team = "egyptian"])
+  ;;show (word "Israeli Units: " count turtles with [team = "israeli"])
+  ;;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
   tick
 end
 
@@ -477,7 +515,7 @@ to q-learn-move-israeli
   if [terrain-type] of patch-here = "chinese-farm" and [captured-by] of patch-here != "israeli" [
     ifelse [is-strategic] of patch-here [
       set r r + 2000  ;; Higher bonus for strategic locations
-      show (word "Israeli unit " who " captured a strategic location!")
+      ;;show (word "Israeli unit " who " captured a strategic location!")
     ][
       set r r + 1000  ;; Regular bonus for standard patches
     ]
@@ -510,16 +548,16 @@ to q-learn-move-egyptian
     ]
     let strategic-israeli-captured strategic-locations with [captured-by = "israeli"] in-radius 40
     ifelse any? strategic-israeli-captured [
-      show (word "Egyptian tank " who " detected captured strategic location!")
+      ;;show (word "Egyptian tank " who " detected captured strategic location!")
       set action "surround"
     ][
       ifelse any? turtles with [team = "israeli"] in-radius 10 [
-        show (word "Egyptian tank " who " detected an Israeli unit!")
+        ;;show (word "Egyptian tank " who " detected an Israeli unit!")
         set action "surround"
       ][
         let israeli-captured-nearby patches in-radius 12 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
         ifelse any? israeli-captured-nearby [
-          show (word "Egyptian tank " who " moving to recapture territory!")
+          ;;show (word "Egyptian tank " who " moving to recapture territory!")
           face min-one-of israeli-captured-nearby [distance myself]
           fd 1.5
           if random-float 1 < 0.3 [
@@ -550,7 +588,7 @@ to q-learn-move-egyptian
     if target != nobody [
       face target
       fd 2
-      show (word "Egyptian tank " who " moving toward strategic location!")
+      ;;show (word "Egyptian tank " who " moving toward strategic location!")
     ]
   ][
     let nearby-israeli-tanks israeli-tanks in-radius 10
@@ -624,7 +662,7 @@ to q-learn-move-egyptian
   if [terrain-type] of patch-here = "chinese-farm" and [captured-by] of patch-here = "israeli" [
     ifelse [is-strategic] of patch-here [
       set r r + 2000
-      show (word "Egyptian tank " who " recaptured a strategic location!")
+      ;;show (word "Egyptian tank " who " recaptured a strategic location!")
     ][
       set r r + 1000
     ]
@@ -676,7 +714,7 @@ to q-learn-move-israeli-infantry
   if [terrain-type] of patch-here = "chinese-farm" and [captured-by] of patch-here != "israeli" [
     ifelse [is-strategic] of patch-here [
       set r r + 1500
-      show (word "Israeli infantry " who " captured a strategic location!")
+      ;;show (word "Israeli infantry " who " captured a strategic location!")
     ][
       set r r + 750
     ]
@@ -708,7 +746,7 @@ to q-learn-move-egyptian-infantry
     ]
     let strategic-israeli-captured strategic-locations with [captured-by = "israeli"] in-radius 40
     ifelse any? strategic-israeli-captured [
-      show (word "Egyptian infantry " who " detected captured strategic location!")
+      ;;show (word "Egyptian infantry " who " detected captured strategic location!")
       set action "surround"
     ][
       ifelse any? turtles with [team = "israeli"] in-radius 7 [
@@ -717,7 +755,7 @@ to q-learn-move-egyptian-infantry
       ][
         let israeli-captured-nearby patches in-radius 10 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
         ifelse any? israeli-captured-nearby [
-          show (word "Egyptian infantry " who " moving to recapture territory!")
+          ;;show (word "Egyptian infantry " who " moving to recapture territory!")
           face min-one-of israeli-captured-nearby [distance myself]
           fd 1.25
           if random-float 1 < 0.3 [
@@ -742,7 +780,7 @@ to q-learn-move-egyptian-infantry
     if target != nobody [
       face target
       fd 1.75
-      show (word "Egyptian infantry " who " moving toward strategic location!")
+      ;;show (word "Egyptian infantry " who " moving toward strategic location!")
     ]
   ][
     let nearby-israeli-tanks israeli-tanks in-radius 10
@@ -816,7 +854,7 @@ to q-learn-move-egyptian-infantry
   if [terrain-type] of patch-here = "chinese-farm" and [captured-by] of patch-here = "israeli" [
     ifelse [is-strategic] of patch-here [
       set r r + 1500
-      show (word "Egyptian infantry " who " recaptured a strategic location!")
+      ;;show (word "Egyptian infantry " who " recaptured a strategic location!")
     ][
       set r r + 750
     ]
@@ -829,13 +867,13 @@ end
 ; ACTION SELECTION & Q-VALUE LOOKUPS
 ;------------------------------------------------
 to-report choose-action-israeli [s]
-  if ticks < 10 [
+  if ticks < 50 [
     if (random-float 1 < i-epsilon) [
       report one-of ["move-north" "move-south" "move-east" "move-west"]
     ]
     report max-arg-group s group-id "israeli"
   ]
-  if ticks >= 10 [
+  if ticks >= 50 [
     if (random-float 1 < i-epsilon) [
       report one-of ["move-north" "move-south" "move-east" "move-west" "protect bridgehead"]
     ]
@@ -1117,7 +1155,7 @@ to capture-chinese-farm
       ask patch-here [
         if terrain-type = "chinese-farm" [
           if not fortified? [
-            if ticks >= 20 and member? self bridgehead-zone [
+            if ticks >= 100 and member? self bridgehead-zone [
               ;; Capture the bridgehead patch
               set captured-by "egyptian"
               set pcolor turquoise  ;; Special color for captured bridgehead
@@ -1146,7 +1184,7 @@ end
 to reinforce-chinese-farm
   ;; --- Egyptian Tanks ---
   ask egyptian-tanks [
-    if ticks >= 20 [
+    if ticks >= 100 [
       ifelse any? bridgehead-zone with [ captured-by != "egyptian" ] in-radius 20 [
         let target min-one-of bridgehead-zone with [ captured-by != "egyptian" ] [ distance myself ]
         if target != nobody [
@@ -1176,7 +1214,7 @@ to reinforce-chinese-farm
         ]
       ]
     ]
-    if ticks < 20 [
+    if ticks < 100 [
       ;; Standard behavior before tick 20
       ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
         let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
@@ -1201,7 +1239,7 @@ to reinforce-chinese-farm
 
   ;; --- Egyptian Infantry ---
   ask infantry with [ team = "egyptian" ] [
-    if ticks >= 20 [
+    if ticks >= 100 [
       ifelse any? bridgehead-zone with [ captured-by != "egyptian" ] in-radius 15 [
         let target min-one-of bridgehead-zone with [ captured-by != "egyptian" ] [ distance myself ]
         if target != nobody [
@@ -1229,7 +1267,7 @@ to reinforce-chinese-farm
         ]
       ]
     ]
-    if ticks < 20 [
+    if ticks < 100 [
       ;; Standard behavior before tick 20
       ifelse any? turtles with [ team = "israeli" ] in-radius 7 [
         let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]

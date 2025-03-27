@@ -1297,62 +1297,52 @@ to penalize-death
   die
 end
 
-to grid-search
-  ;; Define parameter ranges for Israeli learning parameters.
-  let e-alpha-values [0.2 0.5 0.8]
-  let e-gamma-values [0.2 0.5 0.8]
-  let e-epsilon-values [0.2 0.5 0.8]
+to grid-search-epsilon
+  ;; Define only epsilon values to test
+  let e-epsilon-values [0.1 0.3 0.5 0.7 0.9]
 
-  ;; Create an empty list to store results.
+  ;; Fixed alpha and gamma
+  set e-alpha 0.5
+  set e-gamma 0.5
+
+  ;; Results table: [epsilon avg-israeli-bridgehead-deaths]
   let results []
 
-  ;; Loop over every combination of parameter values.
-  foreach e-alpha-values [ ea ->
-    foreach e-gamma-values [ eg ->
-      foreach e-epsilon-values [ ee ->
-        ;; Create an empty list to store the 5 trial outcomes.
-        let trial-results []
+  foreach e-epsilon-values [ ee ->
+    set e-epsilon ee
+    let total-deaths 0  ;; Track deaths across all trials for this epsilon
 
-        ;; Run each combination 5 times.
-        repeat 3 [
-          ;; Set the model parameters.
-          set e-alpha ea
-          set e-gamma eg
-          set e-epsilon ee
+    repeat 5 [  ;; 5 trials per epsilon
+      setup
+      let prev-israeli-units []  ;; Store living Israeli units in bridgehead from previous tick
 
-          ;; Setup the simulation.
-          setup
-
-          ;; Run the simulation for a fixed number of ticks.
-          repeat 100 [
-            go
-          ]
-
-          ;; At the end, count the remaining units for each side.
-          let israeli-count count turtles with [team = "israeli"]
-          let egyptian-count count turtles with [team = "egyptian"]
-
-          ;; Determine the winner based on which side has more units left.
-          let winner (ifelse-value (israeli-count > egyptian-count)
-                          ["israeli"]
-                          ["egyptian"])
-
-          ;; Store the result of this trial.
-          set trial-results lput (list israeli-count egyptian-count winner) trial-results
+      repeat 50 [  ;; 100 ticks per trial
+        ;; Record Israeli units in bridgehead BEFORE movement
+        set prev-israeli-units turtles with [
+          team = "israeli" and member? patch-here bridgehead-zone
         ]
 
-        ;; Store the results for the current parameter combination.
-        set results lput (list ea eg ee trial-results) results
+        go  ;; Execute the tick
 
-        ;; Print the current parameter combination and its trial results.
-        print (word "Parameters: e-alpha = " ea ", e-gamma = " eg ", e-epsilon = " ee
-                    " --> Trial Results: " trial-results)
+        ;; Calculate deaths: prev-israeli-units MINUS current living units in bridgehead
+        let current-israeli-units turtles with [
+          team = "israeli" and member? patch-here bridgehead-zone
+        ]
+        let dead-units (count prev-israeli-units) - (count current-israeli-units)
+        if dead-units > 0 [
+          set total-deaths (total-deaths + dead-units)
+        ]
       ]
     ]
+
+    ;; Store average deaths per epsilon
+    let avg-deaths (total-deaths / 5)
+    set results lput (list ee avg-deaths) results
+    print (word "e-epsilon = " ee " | Avg Israeli bridgehead deaths: " avg-deaths)
   ]
 
-  ;; Optionally, print the full list of results.
-  print "Full grid search results:"
+  ;; Output final results
+  print "=== Epsilon vs Israeli Bridgehead Deaths ==="
   print results
 end
 
