@@ -205,10 +205,10 @@ to setup-bridgehead-zone
      terrain-type = "chinese-farm" and
      in-polygon?
      (list
-       (list 192 288)  ; First point
-       (list 261 340)  ; Second point
-       (list 276 315)  ; Third point
-       (list 210 252)  ; Fourth point
+       (list 180 288)  ; First point
+       (list 290 340)  ; Second point
+       (list 280 315)  ; Third point
+       (list 200 252)  ; Fourth point
      )
    ]
    ask bridgehead-zone [
@@ -249,15 +249,15 @@ end
 ;   (202,458), (208,358), (265,221)
 ;------------------------------------------------
 to setup-strategic-locations
-  create-strategic-location 202 458
-  create-strategic-location 208 358
+  create-strategic-location 202 330
+  create-strategic-location 190 300
   create-strategic-location 265 221
 end
 
 to create-strategic-location [x y]
   let location-patches patches with [
-    pxcor >= (x - 1) and pxcor <= (x + 1) and
-    pycor >= (y - 1) and pycor <= (y + 1) and
+    pxcor >= (x - 5) and pxcor <= (x + 5) and
+    pycor >= (y - 5) and pycor <= (y + 5) and
     terrain-type = "chinese-farm"
   ]
   ask location-patches [
@@ -359,7 +359,7 @@ to setup-egyptian-troops-on-strategic
     set color 25
     ;; random within ±20 of (200,350)
     let rx (200 - 20 + random 41)
-    let ry (350 - 20 + random 41)
+    let ry (300 - 20 + random 41)
     setxy rx ry
     set state (list xcor ycor)
     set action "hold-position"
@@ -750,7 +750,7 @@ to q-learn-move-egyptian-infantry
       set action "surround"
     ][
       ifelse any? turtles with [team = "israeli"] in-radius 7 [
-        show (word "Egyptian infantry " who " detected an Israeli unit!")
+        ;show (word "Egyptian infantry " who " detected an Israeli unit!")
         set action "surround"
       ][
         let israeli-captured-nearby patches in-radius 10 with [terrain-type = "chinese-farm" and captured-by = "israeli"]
@@ -1142,7 +1142,7 @@ to capture-chinese-farm
           ifelse is-strategic [
             set captured-by "israeli"
             set pcolor orange  ;; Strategic capture color for Israelis
-            show (word "Strategic location captured by Israeli forces!")
+            ;show (word "Strategic location captured by Israeli forces!")
             set control-time 0
           ][
             set captured-by "israeli"
@@ -1159,14 +1159,14 @@ to capture-chinese-farm
               ;; Capture the bridgehead patch
               set captured-by "egyptian"
               set pcolor turquoise  ;; Special color for captured bridgehead
-              show (word "Bridgehead captured by Egyptian forces!")
+              ;show (word "Bridgehead captured by Egyptian forces!")
               set control-time 0
             ]
             if not member? self bridgehead-zone [
               ifelse is-strategic [
                 set captured-by "egyptian"
                 set pcolor turquoise
-                show (word "Strategic location secured by Egyptian forces!")
+                ;show (word "Strategic location secured by Egyptian forces!")
                 set control-time 0
               ][
                 set captured-by "egyptian"
@@ -1190,7 +1190,7 @@ to reinforce-chinese-farm
         if target != nobody [
           face target
           fd 2  ; move faster toward the bridgehead
-          show (word "Egyptian tank " who " moving to invade the bridgehead!")
+          ;show (word "Egyptian tank " who " moving to invade the bridgehead!")
         ]
       ] [
         ;; Fallback standard behavior if no bridgehead patch available
@@ -1245,7 +1245,7 @@ to reinforce-chinese-farm
         if target != nobody [
           face target
           fd 1.5
-          show (word "Egyptian infantry " who " invading the bridgehead!")
+          ;show (word "Egyptian infantry " who " invading the bridgehead!")
         ]
       ] [
         ;; Fallback behavior for infantry
@@ -1296,7 +1296,7 @@ to reinforce-chinese-farm
       if target != nobody and random-float 1 < 0.7 [
         face target
         fd 1.75
-        show (word "Israeli unit " who " moving to capture strategic location!")
+        ;show (word "Israeli unit " who " moving to capture strategic location!")
       ]
     ]
   ]
