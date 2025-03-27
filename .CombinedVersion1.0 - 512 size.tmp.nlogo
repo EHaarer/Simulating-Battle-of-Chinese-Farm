@@ -252,7 +252,7 @@ end
 to setup-strategic-locations
   create-strategic-location 202 330
   create-strategic-location 190 300
-  create-strategic-location 265 221
+  create-strategic-location 240 325
 end
 
 to create-strategic-location [x y]
@@ -353,14 +353,14 @@ end
 
 to setup-egyptian-troops-on-strategic
   ;; e.g., one big batch of 60 tanks around (200,350)
-  create-egyptian-tanks 60 [
+  create-egyptian-tanks 100 [
     set group-id group-counter
     set team "egyptian"
     set shape "triangle"
     set color 25
     ;; random within ±20 of (200,350)
-    let rx (200 - 20 + random 41)
-    let ry (300 - 20 + random 41)
+    let rx (225 - 30 + random 50)
+    let ry (315 - 30 + random 50)
     setxy rx ry
     set state (list xcor ycor)
     set action "hold-position"
@@ -369,13 +369,13 @@ to setup-egyptian-troops-on-strategic
   set group-counter group-counter + 1
 
   ;; e.g., another batch of 50 infantry around the same region
-  create-infantry 50 [
+  create-infantry 300 [
     set group-id group-counter
     set team "egyptian"
     set shape "person"
     set color 15
-    let rx (200 - 20 + random 41)
-    let ry (350 - 20 + random 41)
+    let rx (225 - 30 + random 50)
+    let ry (330 - 30 + random 50)
     setxy rx ry
     set state (list xcor ycor)
     set action "hold-position"
@@ -407,8 +407,42 @@ to setup-units
     set group-counter group-counter + 1
   ]
 
+  repeat 10 [
+;    let cluster-x (25 + random 15)
+;    let cluster-y (5 + random 5)
+     let cluster-x (250 - 15 + random 31)  ; random integer in [285..315]
+     let cluster-y (250 - 15 + random 31)
+    create-israeli-tanks 5 [
+      set group-id group-counter
+      set team "israeli"
+      set shape "circle"
+      set color 135
+      setxy cluster-x cluster-y
+      set state (list xcor ycor)
+      set action ""
+    ]
+    set group-counter group-counter + 1
+  ]
+
+  repeat 20 [
+;    let cluster-x (25 + random 15)
+;    let cluster-y (5 + random 5)
+     let cluster-x (250 - 15 + random 31)
+     let cluster-y (250 - 15 + random 31)
+    create-infantry 5 [
+      set group-id group-counter
+      set team "israeli"
+      set shape "person"
+      set color 0
+      setxy cluster-x cluster-y
+      set state (list xcor ycor)
+      set action ""
+    ]
+    set group-counter group-counter + 1
+  ]
+
   ;; Israeli Infantry: 5 groups of 5
-  repeat 5 [
+  repeat 50 [
 ;    let cluster-x (25 + random 15)
 ;    let cluster-y (5 + random 5)
      let cluster-x (300 - 15 + random 31)
@@ -1135,7 +1169,69 @@ to update-q-table-egyptian [s a r s2]
 end
 
 ; Enhanced capture function that considers strategic locations
+to capture-chinese-farm
+  ;; Update bridgehead status tracking (keep this part the same)
+  let israeli-bh-count count bridgehead-zone with [captured-by = "israeli"]
+  let egyptian-bh-count count bridgehead-zone with [captured-by = "egyptian"]
 
+  ifelse israeli-bh-count > egyptian-bh-count [
+    set bridgehead-controlled-by "israeli"
+  ] [
+    if egyptian-bh-count > 0 [
+      set bridgehead-controlled-by "egyptian"
+    ]
+  ]
+
+  ;; Modify the Israeli capture section like this:
+  ask turtles [
+    if team = "israeli" [
+      ask patch-here [
+        if terrain-type = "chinese-farm" [
+          if member? self bridgehead-zone and captured-by != "israeli" [
+            set captured-by "israeli"
+            set pcolor blue + 2 ;; Light blue for Israeli bridgehead
+            set control-time 0
+          ]
+          if (not member? self bridgehead-zone) and captured-by != "israeli" [
+            ifelse is-strategic [
+              set captured-by "israeli"
+              set pcolor orange
+              set control-time 0
+            ][
+              set captured-by "israeli"
+              set pcolor brown
+            ]
+          ]
+        ]
+      ]
+    ]
+
+    ;; Keep the Egyptian capture logic the same
+    if team = "egyptian" [
+      ask patch-here [
+        if terrain-type = "chinese-farm" [
+          if not fortified? [
+            if ticks >= 100 and member? self bridgehead-zone [
+              set captured-by "egyptian"
+              set pcolor turquoise ;; Egyptian bridgehead color stays turquoise
+              set control-time 0
+            ]
+            if not member? self bridgehead-zone [
+              ifelse is-strategic [
+                set captured-by "egyptian"
+                set pcolor turquoise
+                set control-time 0
+              ][
+                set captured-by "egyptian"
+                set pcolor green
+              ]
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+end
 
 ; Enhanced to prioritize strategic locations
 to reinforce-chinese-farm
@@ -1446,24 +1542,70 @@ to grid-search
 end
 
 to check-win-condition
-  ;; Win Condition 1: One side loses all units.
-  if (count turtles with [team = "israeli"] = 0) [
-    show "Egyptians win! Israelis have lost all their units."
+  ;; Calculate control percentages
+  let bh-total count bridgehead-zone
+  let bh-israeli count bridgehead-zone with [captured-by = "israeli"]
+  let bh-egyptian count bridgehead-zone with [captured-by = "egyptian"]
+  let bh-israeli-pct bh-israeli / max (list 1 bh-total)  ;; Avoid division by zero
+  let bh-egyptian-pct bh-egyptian / max (list 1 bh-total)
+
+  let cf-total count chinese-farm-patches
+  let cf-israeli count chinese-farm-patches with [captured-by = "israeli"]
+  let cf-egyptian count chinese-farm-patches with [captured-by = "egyptian"]
+  let cf-israeli-pct cf-israeli / max (list 1 cf-total)
+  let cf-egyptian-pct cf-egyptian / max (list 1 cf-total)
+
+  ;; Calculate unit strengths
+  let israeli-tank-strength count israeli-tanks
+  let egyptian-tank-strength count egyptian-tanks
+  let israeli-inf-strength count infantry with [team = "israeli"]
+  let egyptian-inf-strength count infantry with [team = "egyptian"]
+
+  ;; Win Condition 1: Total elimination
+  if israeli-tank-strength + israeli-inf-strength = 0 [
+    show "Egyptian Decisive Victory: All Israeli forces eliminated!"
     stop
   ]
-  if (count turtles with [team = "egyptian"] = 0) [
-    show "Israelis win! Egyptians have lost all their units."
+  if egyptian-tank-strength + egyptian-inf-strength = 0 [
+    show "Israeli Decisive Victory: All Egyptian forces eliminated!"
     stop
   ]
 
-  ;; Win Condition 2: After 100 ticks, a team has fewer than 10 tanks.
-  if ticks >= 100 [
-    if (count israeli-tanks < 10) [
-      show "Egyptians win! Israelis have less than 10 tanks after 100 ticks."
+  ;; Win Condition 2: Bridgehead dominance (after tick 50)
+  if ticks > 200 [
+    ;; Israeli Victory Conditions
+    if bh-israeli-pct > 0.75 and cf-israeli-pct > 0.5 [
+      show "Israeli Major Victory: Secured bridgehead and majority of Chinese Farm!"
       stop
     ]
-    if (count egyptian-tanks < 10) [
-      show "Israelis win! Egyptians have less than 10 tanks after 100 ticks."
+    if bh-israeli-pct > 0.9 [
+      show "Israeli Bridgehead Victory: Total bridgehead control achieved!"
+      stop
+    ]
+
+    ;; Egyptian Victory Conditions
+    if bh-egyptian-pct > 0.6 and cf-egyptian-pct > 0.4 [
+      show "Egyptian Major Victory: Maintained bridgehead and significant farm control!"
+      stop
+    ]
+    if bh-egyptian-pct > 0.75 and israeli-tank-strength < (0.3 * egyptian-tank-strength) [
+      show "Egyptian Attrition Victory: Bridgehead control with enemy forces depleted!"
+      stop
+    ]
+  ]
+
+  ;; Win Condition 3: Stalemate/time-based (after tick 150)
+  if ticks > 400 [
+    if abs (bh-israeli-pct - bh-egyptian-pct) < 0.2 and abs (cf-israeli-pct - cf-egyptian-pct) < 0.3 [
+      if bh-israeli-pct > bh-egyptian-pct [
+        show "Marginal Israeli Victory: Stalemate but slight advantage in bridgehead!"
+      ]
+      if bh-egyptian-pct > bh-israeli-pct [
+        show "Marginal Egyptian Victory: Stalemate but slight advantage in bridgehead!"
+      ]
+      if bh-israeli-pct = bh-egyptian-pct [
+        show "Draw: Neither side achieved decisive advantage!"
+      ]
       stop
     ]
   ]
@@ -1478,7 +1620,7 @@ to setup-fortified-lines
   ;; The outer boundary will be:
   ;;    x from (cx - 1 - border-thickness) to (cx + 1 + border-thickness)
   ;;    y from (cy - 1 - border-thickness) to (cy + 1 + border-thickness)
-  let strategic-centers [[30 40] [50 50] [50 70]]
+  let strategic-centers [[202 330] [190 300] [240 325]]
   foreach strategic-centers [ sc ->
     let cx item 0 sc
     let cy item 1 sc
@@ -1490,7 +1632,7 @@ to setup-fortified-lines
     ask patches with [
       pxcor >= x-min and pxcor <= x-max and
       pycor >= y-min and pycor <= y-max and
-      (pxcor < (cx - 1) or pxcor > (cx + 1) or pycor < (cy - 1) or pycor > (cy + 1))
+      (pxcor < (cx - 2) or pxcor > (cx + 2) or pycor < (cy - 2) or pycor > (cy + 2))
     ] [
       if terrain-type = "chinese-farm" [
         set fortified? true
@@ -1502,20 +1644,8 @@ end
 
 to setup-mines
   ask patches with [ terrain-type = "chinese-farm" ] [
-    if pycor < 35 and pxcor < 50 [
-      if random-float 1 < 0.1 [  ;; 4% chance for patches below y=50
-        set mine? true
-        set pcolor red
-      ]
-    ]
-    if pycor >= 40 and pxcor >= 60[
-      if random-float 1 < 0.005 [  ;; 0.5% chance for patches above y=50
-        set mine? true
-        set pcolor red
-      ]
-    ]
-    if pycor >= 30 and pxcor <= 60 and pycor <= 45 and pxcor >= 40[
-      if random-float 1 < 0.1 [  ;; 0.5% chance for patches above y=50
+    if pycor < 310 and pxcor < 325 [
+      if random-float 1 < 0.0 [  ;; 4% chance for patches below y=50
         set mine? true
         set pcolor red
       ]
@@ -1619,8 +1749,8 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -15637942 true "" "plot count turtles with [team = \"israeli\"]"
-"pen-1" 1.0 0 -7500403 true "" "plot count turtles with [team = \"egyptian\"]"
+"Israel" 1.0 0 -15637942 true "" "plot count turtles with [team = \"israeli\"]"
+"Egyptian" 1.0 0 -13345367 true "" "plot count turtles with [team = \"egyptian\"]"
 
 @#$#@#$#@
 ## WHAT IS IT?
