@@ -1,6 +1,6 @@
 # Battle For The Chinese Farm Simulation
 
-![NetLogo Simulation Screenshot](docs/Screenshot 2025-03-31 at 15.21.17.png)  
+![NetLogo Simulation Screenshot](Screenshot 2025-03-31 at 15.21.17.png)  
 *Egyptian (green) vs Israeli (blue) forces in the Chinese Farm/Bridgehead sector*
 
 ## 📌 Overview
