@@ -1,7 +1,12 @@
 # Battle For The Chinese Farm Simulation
 
-![NetLogo Simulation Screenshot](Screenshot 2025-03-31 at 15.21.17.png)  
-*Egyptian (green) vs Israeli (blue) forces in the Chinese Farm/Bridgehead sector*
+## 🌄 Simulation Visualization
+<img src="./Screenshot%202025-03-31%20at%2015.21.17.png" width="800" style="border: 1px solid #eee;">
+
+Key elements shown:
+1. Egyptian fortified positions (green triangles)
+2. Israeli armored push (blue circles)
+3. Bridgehead zone (magenta)
 
 ## 📌 Overview
 A NetLogo Q-learning simulation modeling the 1973 Yom Kippur War battlefield dynamics, focusing on:
