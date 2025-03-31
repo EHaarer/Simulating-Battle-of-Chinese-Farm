@@ -419,8 +419,8 @@ to setup-egyptian-troops-on-strategic
     set team "egyptian"
     set shape "person"
     set color 15
-    let rx (20 - 10 + random 20)
-    let ry (325 - 10 + random 20)
+    let rx (225 - 10 + random 20)
+    let ry (300 - 10 + random 20)
     setxy rx ry
     set state (list xcor ycor)
     set action "hold-position"
@@ -991,7 +991,7 @@ end
 to-report max-arg-group [s g side]
   let actions []
   if side = "egyptian" [
-    ifelse ticks < 15 [
+    ifelse ticks < 5 [
       set actions ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
     ][
     set actions ["move-north" "move-south" "move-east" "move-west" "defend" "surround" "stop bridgehead"]

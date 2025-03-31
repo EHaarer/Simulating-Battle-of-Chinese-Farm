@@ -250,9 +250,9 @@ end
 ;   (202,458), (208,358), (265,221)
 ;------------------------------------------------
 to setup-strategic-locations
-  create-strategic-location 202 330
+  create-strategic-location 210 320
   create-strategic-location 190 300
-  create-strategic-location 230 315
+  create-strategic-location 240 325
 end
 
 to create-strategic-location [x y]
@@ -353,14 +353,14 @@ end
 
 to setup-egyptian-troops-on-strategic
   ;; e.g., one big batch of 60 tanks around (200,350)
-  create-egyptian-tanks 100 [
+  create-egyptian-tanks 75 [
     set group-id group-counter
     set team "egyptian"
     set shape "triangle"
     set color 25
     ;; random within ±20 of (200,350)
-    let rx (200 - 20 + random 41)
-    let ry (300 - 20 + random 41)
+    let rx (210 - 10 + random 20)
+    let ry (310 - 10 + random 20)
     setxy rx ry
     set state (list xcor ycor)
     set action "hold-position"
@@ -368,14 +368,59 @@ to setup-egyptian-troops-on-strategic
   ]
   set group-counter group-counter + 1
 
+   create-egyptian-tanks 50 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "triangle"
+    set color 25
+    ;; random within ±20 of (200,350)
+    let rx (190 - 10 + random 20)
+    let ry (300 - 10 + random 20)
+    setxy rx ry
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+
+   create-egyptian-tanks 50 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "triangle"
+    set color 25
+    ;; random within ±20 of (200,350)
+    let rx (240 - 10 + random 20)
+    let ry (325 - 10 + random 20)
+    setxy rx ry
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+
+
   ;; e.g., another batch of 50 infantry around the same region
-  create-infantry 300 [
+  create-infantry 150 [
     set group-id group-counter
     set team "egyptian"
     set shape "person"
     set color 15
-    let rx (200 - 20 + random 41)
-    let ry (350 - 20 + random 41)
+    let rx (240 - 10 + random 20)
+    let ry (325 - 10 + random 20)
+    setxy rx ry
+    set state (list xcor ycor)
+    set action "hold-position"
+    set size 1.5
+  ]
+  set group-counter group-counter + 1
+
+  create-infantry 150 [
+    set group-id group-counter
+    set team "egyptian"
+    set shape "person"
+    set color 15
+    let rx (225 - 10 + random 20)
+    let ry (300 - 10 + random 20)
     setxy rx ry
     set state (list xcor ycor)
     set action "hold-position"
@@ -902,13 +947,13 @@ end
 ; ACTION SELECTION & Q-VALUE LOOKUPS
 ;------------------------------------------------
 to-report choose-action-israeli [s]
-  if ticks < 50 [
+  if ticks < 75 [
     if (random-float 1 < i-epsilon) [
       report one-of ["move-north" "move-south" "move-east" "move-west"]
     ]
     report max-arg-group s group-id "israeli"
   ]
-  if ticks >= 50 [
+  if ticks >= 75 [
     if (random-float 1 < i-epsilon) [
       report one-of ["move-north" "move-south" "move-east" "move-west" "protect bridgehead"]
     ]
@@ -946,14 +991,14 @@ end
 to-report max-arg-group [s g side]
   let actions []
   if side = "egyptian" [
-    ifelse ticks < 15 [
+    ifelse ticks < 75 [
       set actions ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
     ][
     set actions ["move-north" "move-south" "move-east" "move-west" "defend" "surround" "stop bridgehead"]
   ]
   ]
   if side = "israeli" [
-  ifelse ticks < 15 [
+  ifelse ticks < 75 [
     set actions ["move-north" "move-south" "move-east" "move-west"]
   ] [
     set actions ["move-north" "move-south" "move-east" "move-west" "protect bridgehead"]
@@ -1211,7 +1256,7 @@ to capture-chinese-farm
       ask patch-here [
         if terrain-type = "chinese-farm" [
           if not fortified? [
-            if ticks >= 100 and member? self bridgehead-zone [
+            if ticks >= 75 and member? self bridgehead-zone [
               set captured-by "egyptian"
               set pcolor turquoise ;; Egyptian bridgehead color stays turquoise
               set control-time 0
@@ -1237,7 +1282,7 @@ end
 to reinforce-chinese-farm
   ;; --- Egyptian Tanks ---
   ask egyptian-tanks [
-    if ticks >= 100 [
+    if ticks >= 75 [
       ifelse any? bridgehead-zone with [ captured-by != "egyptian" ] in-radius 20 [
         let target min-one-of bridgehead-zone with [ captured-by != "egyptian" ] [ distance myself ]
         if target != nobody [
@@ -1267,7 +1312,7 @@ to reinforce-chinese-farm
         ]
       ]
     ]
-    if ticks < 100 [
+    if ticks < 75 [
       ;; Standard behavior before tick 20
       ifelse any? turtles with [ team = "israeli" ] in-radius 5 [
         let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
@@ -1292,7 +1337,7 @@ to reinforce-chinese-farm
 
   ;; --- Egyptian Infantry ---
   ask infantry with [ team = "egyptian" ] [
-    if ticks >= 100 [
+    if ticks >= 75 [
       ifelse any? bridgehead-zone with [ captured-by != "egyptian" ] in-radius 15 [
         let target min-one-of bridgehead-zone with [ captured-by != "egyptian" ] [ distance myself ]
         if target != nobody [
@@ -1320,7 +1365,7 @@ to reinforce-chinese-farm
         ]
       ]
     ]
-    if ticks < 100 [
+    if ticks < 75 [
       ;; Standard behavior before tick 20
       ifelse any? turtles with [ team = "israeli" ] in-radius 7 [
         let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
@@ -1482,64 +1527,99 @@ to penalize-death
   die
 end
 
-to grid-search
-  ;; Define parameter ranges for Israeli learning parameters.
-  let e-alpha-values [0.2 0.5 0.8]
-  let e-gamma-values [0.2 0.5 0.8]
-  let e-epsilon-values [0.2 0.5 0.8]
+to focused-epsilon-search
+  ;; Fixed parameters for other variables
+  set e-alpha 0.5  ;; Fixed learning rate
+  set e-gamma 0.5  ;; Fixed discount factor
 
-  ;; Create an empty list to store results.
+  ;; Exploration values to test
+  let epsilon-values [0.1 0.3 0.5 0.7 0.9]
   let results []
 
-  ;; Loop over every combination of parameter values.
-  foreach e-alpha-values [ ea ->
-    foreach e-gamma-values [ eg ->
-      foreach e-epsilon-values [ ee ->
-        ;; Create an empty list to store the 5 trial outcomes.
-        let trial-results []
+  foreach epsilon-values [ ee ->
+    set e-epsilon ee
+    let trial-results []
 
-        ;; Run each combination 5 times.
-        repeat 3 [
-          ;; Set the model parameters.
-          set e-alpha ea
-          set e-gamma eg
-          set e-epsilon ee
+    repeat 5 [
+      ;; 1. SETUP - but don't record initial counts yet
+      setup
 
-          ;; Setup the simulation.
-          setup
+      ;; 2. RECORD INITIAL COUNTS AFTER SETUP BUT BEFORE SIMULATION
+      let initial-israeli-tanks count israeli-tanks
+      let initial-egyptian-tanks count egyptian-tanks
+      let initial-israeli-inf count infantry with [team = "israeli"]
+      let initial-egyptian-inf count infantry with [team = "egyptian"]
 
-          ;; Run the simulation for a fixed number of ticks.
-          repeat 100 [
-            go
-          ]
+      ;; 3. RUN SIMULATION
+      repeat 150 [ go ]
 
-          ;; At the end, count the remaining units for each side.
-          let israeli-count count turtles with [team = "israeli"]
-          let egyptian-count count turtles with [team = "egyptian"]
+      ;; 4. CALCULATE LOSSES (current count is automatically post-simulation)
+      let israeli-tanks-lost (initial-israeli-tanks - count israeli-tanks)
+      let egyptian-tanks-lost (initial-egyptian-tanks - count egyptian-tanks)
+      let israeli-inf-lost (initial-israeli-inf - count infantry with [team = "israeli"])
+      let egyptian-inf-lost (initial-egyptian-inf - count infantry with [team = "egyptian"])
 
-          ;; Determine the winner based on which side has more units left.
-          let winner (ifelse-value (israeli-count > egyptian-count)
-                          ["israeli"]
-                          ["egyptian"])
+      ;; Rest of your data collection...
+      let bh-total count bridgehead-zone
+      let bh-israeli count bridgehead-zone with [captured-by = "israeli"]
+      let bh-egyptian count bridgehead-zone with [captured-by = "egyptian"]
+      let bh-israeli-pct (bh-israeli / max (list 1 bh-total)) * 100
+      let bh-egyptian-pct (bh-egyptian / max (list 1 bh-total)) * 100
 
-          ;; Store the result of this trial.
-          set trial-results lput (list israeli-count egyptian-count winner) trial-results
-        ]
+      let cf-total count chinese-farm-patches
+      let cf-israeli count chinese-farm-patches with [captured-by = "israeli"]
+      let cf-egyptian count chinese-farm-patches with [captured-by = "egyptian"]
+      let cf-israeli-pct (cf-israeli / max (list 1 cf-total)) * 100
+      let cf-egyptian-pct (cf-egyptian / max (list 1 cf-total)) * 100
 
-        ;; Store the results for the current parameter combination.
-        set results lput (list ea eg ee trial-results) results
-
-        ;; Print the current parameter combination and its trial results.
-        print (word "Parameters: e-alpha = " ea ", e-gamma = " eg ", e-epsilon = " ee
-                    " --> Trial Results: " trial-results)
-      ]
+      set trial-results lput (list
+        israeli-tanks-lost egyptian-tanks-lost
+        israeli-inf-lost egyptian-inf-lost
+        bh-israeli-pct bh-egyptian-pct
+        cf-israeli-pct cf-egyptian-pct
+      ) trial-results
     ]
+
+    set results lput (list ee trial-results) results
+    print (word "Completed epsilon = " ee " with results: " trial-results)
   ]
 
-  ;; Optionally, print the full list of results.
-  print "Full grid search results:"
-  print results
+  ;; Print final results
+  print "Final Results:"
+  foreach results [ r ->
+    let ee item 0 r
+    let trials item 1 r
+    print (word "Epsilon: " ee " Results: " trials)
+  ]
+
+  ;; Calculate and print averages for each epsilon
+  print "Averages:"
+  foreach results [ r ->
+    let ee item 0 r
+    let trials item 1 r
+
+    ;; Calculate averages across all metrics
+    let avg-israeli-tanks-lost mean map [ t -> item 0 t ] trials
+    let avg-egyptian-tanks-lost mean map [ t -> item 1 t ] trials
+    let avg-israeli-inf-lost mean map [ t -> item 2 t ] trials
+    let avg-egyptian-inf-lost mean map [ t -> item 3 t ] trials
+    let avg-bh-israeli-pct mean map [ t -> item 4 t ] trials
+    let avg-bh-egyptian-pct mean map [ t -> item 5 t ] trials
+    let avg-cf-israeli-pct mean map [ t -> item 6 t ] trials
+    let avg-cf-egyptian-pct mean map [ t -> item 7 t ] trials
+
+    print (word "Epsilon: " ee)
+    print (word "  Avg Israeli tanks lost: " avg-israeli-tanks-lost)
+    print (word "  Avg Egyptian tanks lost: " avg-egyptian-tanks-lost)
+    print (word "  Avg Israeli infantry lost: " avg-israeli-inf-lost)
+    print (word "  Avg Egyptian infantry lost: " avg-egyptian-inf-lost)
+    print (word "  Avg Bridgehead % Israeli: " avg-bh-israeli-pct)
+    print (word "  Avg Bridgehead % Egyptian: " avg-bh-egyptian-pct)
+    print (word "  Avg Chinese Farm % Israeli: " avg-cf-israeli-pct)
+    print (word "  Avg Chinese Farm % Egyptian: " avg-cf-egyptian-pct)
+  ]
 end
+
 
 to check-win-condition
   ;; Calculate control percentages
@@ -1620,7 +1700,7 @@ to setup-fortified-lines
   ;; The outer boundary will be:
   ;;    x from (cx - 1 - border-thickness) to (cx + 1 + border-thickness)
   ;;    y from (cy - 1 - border-thickness) to (cy + 1 + border-thickness)
-  let strategic-centers [[202 330] [190 300] [230 315]]
+  let strategic-centers [[210 320] [190 300] [240 325]]
   foreach strategic-centers [ sc ->
     let cx item 0 sc
     let cy item 1 sc
@@ -1632,7 +1712,7 @@ to setup-fortified-lines
     ask patches with [
       pxcor >= x-min and pxcor <= x-max and
       pycor >= y-min and pycor <= y-max and
-      (pxcor < (cx - 1) or pxcor > (cx + 1) or pycor < (cy - 1) or pycor > (cy + 1))
+      (pxcor < (cx - 2) or pxcor > (cx + 2) or pycor < (cy - 2) or pycor > (cy + 2))
     ] [
       if terrain-type = "chinese-farm" [
         set fortified? true
@@ -1644,20 +1724,8 @@ end
 
 to setup-mines
   ask patches with [ terrain-type = "chinese-farm" ] [
-    if pycor < 35 and pxcor < 50 [
-      if random-float 1 < 0.1 [  ;; 4% chance for patches below y=50
-        set mine? true
-        set pcolor red
-      ]
-    ]
-    if pycor >= 40 and pxcor >= 60[
-      if random-float 1 < 0.005 [  ;; 0.5% chance for patches above y=50
-        set mine? true
-        set pcolor red
-      ]
-    ]
-    if pycor >= 30 and pxcor <= 60 and pycor <= 45 and pxcor >= 40[
-      if random-float 1 < 0.1 [  ;; 0.5% chance for patches above y=50
+    if pycor < 310 and pxcor < 325 [
+      if random-float 1 < 0.03 [  ;; 4% chance for patches below y=50
         set mine? true
         set pcolor red
       ]
