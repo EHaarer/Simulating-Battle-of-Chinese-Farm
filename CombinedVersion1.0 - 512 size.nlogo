@@ -14,7 +14,8 @@ globals [
   road-patches
   chinese-farm-patches
 
-  ;; Q-learning globals (from second file)
+  bridgehead-attack
+  bridgehead-defend
   q-tables-israeli
   q-tables-egyptian
   i-alpha
@@ -29,6 +30,9 @@ globals [
   strategic-locations
   bridgehead-zone
   bridgehead-controlled-by
+  israeli-reinforcements-spawned?
+  egyptian-reinforcements-spawned?
+  reinforcement-tick
 ]
 
 breed [israeli-tanks israeli-tank]
@@ -74,12 +78,14 @@ to setup
   set-patch-size 2
 
   ;; Initialize Q-learning parameters
+  set bridgehead-attack 35
+  set bridgehead-defend 25
   set i-alpha 0.7
   set i-gamma 0.5
   set i-epsilon 0.7
   set e-alpha 0.8
   set e-gamma 0.4
-  set e-epsilon 0.1
+  set e-epsilon 0.5
   set kill-prob 0.5
   set q-tables-israeli []
   set q-tables-egyptian []
@@ -96,6 +102,9 @@ to setup
   set desert-patches 0
   set road-patches 0
   set chinese-farm-patches 0
+  set israeli-reinforcements-spawned? false
+  set egyptian-reinforcements-spawned? false
+  set reinforcement-tick 50  ; When reinforcements arrive
 
 
   ;; Step A: Initialize everything to sandy color + desert-west
@@ -179,6 +188,61 @@ to setup
   show (word "Number of desert patches assigned: " desert-patches)
   show (word "Number of road patches assigned: " road-patches)
   show (word "Number of Chinese farm patches assigned: " chinese-farm-patches)
+end
+
+
+to spawn-reinforcements
+  if ticks = reinforcement-tick [
+    ;; Israeli reinforcements
+    create-israeli-tanks 40 [  ; 20 new tanks
+      set group-id group-counter
+      set team "israeli"
+      set shape "circle"
+      set color 135
+      setxy (300 - 15 + random 31) (300 - 15 + random 31)  ; Spawn near original Israeli positions
+      set state (list xcor ycor)
+      set action ""
+    ]
+    set group-counter group-counter + 1
+
+    create-infantry 30 [  ; 30 new infantry
+      set group-id group-counter
+      set team "israeli"
+      set shape "person"
+      set color 0
+      setxy (300 - 15 + random 31) (300 - 15 + random 31)
+      set state (list xcor ycor)
+      set action ""
+    ]
+    set group-counter group-counter + 1
+
+    ;; Egyptian reinforcements
+    create-egyptian-tanks 40 [  ; 15 new tanks
+      set group-id group-counter
+      set team "egyptian"
+      set shape "triangle"
+      set color 25
+      setxy (200 - 10 + random 30) (360 - 10 + random 30)  ; Spawn near original Egyptian positions
+      set state (list xcor ycor)
+      set action "hold-position"
+    ]
+    set group-counter group-counter + 1
+
+    create-infantry 50 [  ; 25 new infantry
+      set group-id group-counter
+      set team "egyptian"
+      set shape "person"
+      set color 15
+      setxy (200 - 10 + random 30) (360 - 10 + random 30)
+      set state (list xcor ycor)
+      set action "hold-position"
+    ]
+    set group-counter group-counter + 1
+
+    show "Reinforcements have arrived for both sides!"
+    set israeli-reinforcements-spawned? true
+    set egyptian-reinforcements-spawned? true
+  ]
 end
 
 
@@ -359,8 +423,8 @@ to setup-egyptian-troops-on-strategic
     set shape "triangle"
     set color 25
     ;; random within ±20 of (200,350)
-    let rx (200 - 10 + random 20)
-    let ry (360 - 10 + random 20)
+    let rx (200 - 10 + random 30)
+    let ry (360 - 10 + random 30)
     setxy rx ry
     set state (list xcor ycor)
     set action "hold-position"
@@ -374,8 +438,8 @@ to setup-egyptian-troops-on-strategic
     set shape "triangle"
     set color 25
     ;; random within ±20 of (200,350)
-    let rx (200 - 10 + random 20)
-    let ry (360 - 10 + random 20)
+    let rx (190 - 10 + random 30)
+    let ry (360 - 10 + random 30)
     setxy rx ry
     set state (list xcor ycor)
     set action "hold-position"
@@ -389,8 +453,8 @@ to setup-egyptian-troops-on-strategic
     set shape "triangle"
     set color 25
     ;; random within ±20 of (200,350)
-    let rx (200 - 10 + random 20)
-    let ry (360 - 10 + random 20)
+    let rx (190 - 10 + random 30)
+    let ry (360 - 10 + random 30)
     setxy rx ry
     set state (list xcor ycor)
     set action "hold-position"
@@ -405,8 +469,8 @@ to setup-egyptian-troops-on-strategic
     set team "egyptian"
     set shape "person"
     set color 15
-    let rx (220 - 10 + random 20)
-    let ry (370 - 10 + random 20)
+    let rx (200 - 10 + random 30)
+    let ry (370 - 10 + random 30)
     setxy rx ry
     set state (list xcor ycor)
     set action "hold-position"
@@ -435,7 +499,7 @@ end
 ;------------------------------------------------
 to setup-units
   ;; Israeli Tanks: 5 groups of 5
-  repeat 10 [
+  repeat 15 [
 ;    let cluster-x (25 + random 15)
 ;    let cluster-y (5 + random 5)
      let cluster-x (300 - 15 + random 31)  ; random integer in [285..315]
@@ -514,6 +578,7 @@ to go
   reinforce-chinese-farm
   check-win-condition
   check-landmines
+  spawn-reinforcements
   ;;show (word "Israeli Units: " count turtles with [team = "israeli"])
   ;;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
   tick
@@ -947,13 +1012,13 @@ end
 ; ACTION SELECTION & Q-VALUE LOOKUPS
 ;------------------------------------------------
 to-report choose-action-israeli [s]
-  if ticks < 25 [
+  if ticks < bridgehead-defend [
     if (random-float 1 < i-epsilon) [
       report one-of ["move-north" "move-south" "move-east" "move-west"]
     ]
     report max-arg-group s group-id "israeli"
   ]
-  if ticks >= 25 [
+  if ticks >= bridgehead-defend [
     if (random-float 1 < i-epsilon) [
       report one-of ["move-north" "move-south" "move-east" "move-west" "protect bridgehead"]
     ]
@@ -991,14 +1056,14 @@ end
 to-report max-arg-group [s g side]
   let actions []
   if side = "egyptian" [
-    ifelse ticks < 50 [
+    ifelse ticks < bridgehead-attack [
       set actions ["move-north" "move-south" "move-east" "move-west" "defend" "surround"]
     ][
     set actions ["move-north" "move-south" "move-east" "move-west" "defend" "surround" "stop bridgehead"]
   ]
   ]
   if side = "israeli" [
-  ifelse ticks < 50 [
+  ifelse ticks < bridgehead-defend [
     set actions ["move-north" "move-south" "move-east" "move-west"]
   ] [
     set actions ["move-north" "move-south" "move-east" "move-west" "protect bridgehead"]
@@ -1256,7 +1321,7 @@ to capture-chinese-farm
       ask patch-here [
         if terrain-type = "chinese-farm" [
           if not fortified? [
-            if ticks >= 50 and member? self bridgehead-zone [
+            if ticks >= bridgehead-attack and member? self bridgehead-zone [
               set captured-by "egyptian"
               set pcolor turquoise ;; Egyptian bridgehead color stays turquoise
               set control-time 0
@@ -1282,7 +1347,7 @@ end
 to reinforce-chinese-farm
   ;; --- Egyptian Tanks ---
   ask egyptian-tanks [
-    if ticks >= 50 [
+    if ticks >= bridgehead-attack [
       ifelse any? bridgehead-zone with [ captured-by != "egyptian" ] in-radius 100 [
         let target min-one-of bridgehead-zone with [ captured-by != "egyptian" ] [ distance myself ]
         if target != nobody [
@@ -1312,7 +1377,7 @@ to reinforce-chinese-farm
         ]
       ]
     ]
-    if ticks < 50 [
+    if ticks < bridgehead-attack [
       ;; Standard behavior before tick 20
       ifelse any? turtles with [ team = "israeli" ] in-radius 10 [
         let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
@@ -1337,7 +1402,7 @@ to reinforce-chinese-farm
 
   ;; --- Egyptian Infantry ---
   ask infantry with [ team = "egyptian" ] [
-    if ticks >= 50 [
+    if ticks >= bridgehead-attack [
       ifelse any? bridgehead-zone with [ captured-by != "egyptian" ] in-radius 100 [
         let target min-one-of bridgehead-zone with [ captured-by != "egyptian" ] [ distance myself ]
         if target != nobody [
@@ -1365,7 +1430,7 @@ to reinforce-chinese-farm
         ]
       ]
     ]
-    if ticks < 50 [
+    if ticks < bridgehead-attack [
       ;; Standard behavior before tick 20
       ifelse any? turtles with [ team = "israeli" ] in-radius 7 [
         let target min-one-of turtles with [ team = "israeli" ] [ distance myself ]
@@ -1388,7 +1453,7 @@ to reinforce-chinese-farm
 
   ask turtles with [ team = "israeli" ] [
   ;; Priority 1: Defend bridgehead if owned and under threat (after tick 50)
-  if ticks >= 30 and member? patch-here bridgehead-zone and [captured-by] of patch-here = "israeli" [
+  if ticks >= bridgehead-defend and member? patch-here bridgehead-zone and [captured-by] of patch-here = "israeli" [
     let egyptian-threat turtles with [
       team = "egyptian" and
       distance myself < 50 and  ;; Threat radius
@@ -1424,7 +1489,7 @@ to reinforce-chinese-farm
   ]
 
   ;; Priority 3: Reinforce bridgehead if not captured yet
-  if ticks >= 30 and [captured-by] of one-of bridgehead-zone != "israeli" [
+  if ticks >= bridgehead-defend and [captured-by] of one-of bridgehead-zone != "israeli" [
     let closest-bridgehead min-one-of bridgehead-zone [distance myself]
     if distance closest-bridgehead < 100 [  ;; Only respond if reasonably close
       face closest-bridgehead
@@ -1594,7 +1659,6 @@ to focused-epsilon-search
       let israeli-inf-lost (initial-israeli-inf - count infantry with [team = "israeli"])
       let egyptian-inf-lost (initial-egyptian-inf - count infantry with [team = "egyptian"])
 
-      ;; Rest of your data collection...
       let bh-total count bridgehead-zone
       let bh-israeli count bridgehead-zone with [captured-by = "israeli"]
       let bh-egyptian count bridgehead-zone with [captured-by = "egyptian"]
