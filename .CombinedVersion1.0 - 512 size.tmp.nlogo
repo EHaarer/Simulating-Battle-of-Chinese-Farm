@@ -73,7 +73,7 @@ to setup
   ;; 1) WORLD SIZE: 512 x 512
   ;; 2) PATCH SIZE: 2
   ;; --------------------------------------------
-  set battlefield-width 5
+  set battlefield-width 512
   set battlefield-height 512
   resize-world 0 (battlefield-width - 1) 0 (battlefield-height - 1)
   set-patch-size 2
@@ -1858,7 +1858,7 @@ end
 GRAPHICS-WINDOW
 355
 10
-463
+1387
 1043
 -1
 -1
@@ -1873,7 +1873,7 @@ GRAPHICS-WINDOW
 1
 1
 0
-49
+511
 0
 511
 0
@@ -1992,8 +1992,8 @@ true
 false
 "" ""
 PENS
-"Israeli CF control" 1.0 0 -4699768 true "" "let cf-total count chinese-farm-patches\nlet cf-israeli count chinese-farm-patches with [captured-by = \"israeli\"]\nlet cf-israeli-pct (cf-israeli / max (list 1 cf-total)) * 100"
-"Egyptian CF Control" 1.0 0 -13345367 true "" "let cf-total count chinese-farm-patches\nlet cf-egyptian count chinese-farm-patches with [captured-by = \"egyptian\"]\nlet cf-egyptian-pct (cf-egyptian / max (list 1 cf-total)) * 100"
+"Israeli CF control" 1.0 0 -4699768 true "" "let cf-total count chinese-farm-patches\nlet cf-israeli count chinese-farm-patches with [captured-by = \"israeli\"]\nlet cf-israeli-pct (cf-israeli / max (list 1 cf-total)) * 100\nplot cf-israeli-pct"
+"Egyptian CF Control" 1.0 0 -13345367 true "" "let cf-total count chinese-farm-patches\nlet cf-egyptian count chinese-farm-patches with [captured-by = \"egyptian\"]\nlet cf-egyptian-pct (cf-egyptian / max (list 1 cf-total)) * 100\nplot cf-egyptian-pct"
 
 @#$#@#$#@
 ## WHAT IS IT?
