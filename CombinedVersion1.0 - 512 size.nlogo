@@ -13,6 +13,7 @@ globals [
   desert-patches
   road-patches
   chinese-farm-patches
+  bridgehead-patches
 
   bridgehead-attack
   bridgehead-defend
@@ -102,6 +103,7 @@ to setup
   set desert-patches 0
   set road-patches 0
   set chinese-farm-patches 0
+  set bridgehead-patches 0
   set israeli-reinforcements-spawned? false
   set egyptian-reinforcements-spawned? false
   set reinforcement-tick 50  ; When reinforcements arrive
@@ -188,6 +190,7 @@ to setup
   show (word "Number of desert patches assigned: " desert-patches)
   show (word "Number of road patches assigned: " road-patches)
   show (word "Number of Chinese farm patches assigned: " chinese-farm-patches)
+  show (word "Number of bridgehad patches assigned: " bridgehead-patches)
 end
 
 
@@ -277,6 +280,7 @@ to setup-bridgehead-zone
      )
    ]
    ask bridgehead-zone [
+     set bridgehead-patches 1 + bridgehead-patches
      set pcolor magenta
      set bridgehead? true
      set strategic-value 15
@@ -2277,6 +2281,62 @@ NetLogo 6.4.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="gridSearch" repetitions="30" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="200"/>
+    <metric>count israeli-tanks</metric>
+    <metric>count egyptian-tanks</metric>
+    <metric>count infantry with [team = "israeli"]</metric>
+    <metric>count infantry with [team = "egyptian"]</metric>
+    <metric>count bridgehead-zone with [captured-by = "israeli"]</metric>
+    <metric>count bridgehead-zone with [captured-by = "egyptian"]</metric>
+    <metric>count chinese-farm-patches with [captured-by = "israeli"]</metric>
+    <metric>count chinese-farm-patches with [captured-by = "egyptian"]</metric>
+    <enumeratedValueSet variable="e-epsilon">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-alpha">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-gamma">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="gridSearch (1)" repetitions="30" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="200"/>
+    <metric>count israeli-tanks</metric>
+    <metric>count egyptian-tanks</metric>
+    <metric>count infantry with [team = "israeli"]</metric>
+    <metric>count infantry with [team = "egyptian"]</metric>
+    <metric>count bridgehead-zone with [captured-by = "israeli"]</metric>
+    <metric>count bridgehead-zone with [captured-by = "egyptian"]</metric>
+    <metric>count chinese-farm-patches with [captured-by = "israeli"]</metric>
+    <metric>count chinese-farm-patches with [captured-by = "egyptian"]</metric>
+    <enumeratedValueSet variable="e-epsilon">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-alpha">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-gamma">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default

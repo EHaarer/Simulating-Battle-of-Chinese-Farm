@@ -1,0 +1,36 @@
+<experiment name="Simplified Parameter Sweep" repetitions="50" runMetricsEveryStep="false" stopAtTick="200">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>count israeli-tanks</metric>
+    <metric>count egyptian-tanks</metric>
+    <metric>count infantry with [team = "israeli"]</metric>
+    <metric>count infantry with [team = "egyptian"]</metric>
+    <metric>count bridgehead-zone with [captured-by = "israeli"]</metric>
+    <metric>count bridgehead-zone with [captured-by = "egyptian"]</metric>
+    <metric>count chinese-farm-patches with [captured-by = "israeli"]</metric>
+    <metric>count chinese-farm-patches with [captured-by = "egyptian"]</metric>
+    <enumeratedValueSet variable="i-epsilon">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="i-alpha">
+      <value value="0.5"/> <!-- Fixed -->
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="i-gamma">
+      <value value="0.5"/> <!-- Fixed -->
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-epsilon">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-alpha">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-gamma">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+</experiment>

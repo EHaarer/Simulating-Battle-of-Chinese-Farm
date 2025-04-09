@@ -13,6 +13,7 @@ globals [
   desert-patches
   road-patches
   chinese-farm-patches
+  bridgehead-patches
 
   bridgehead-attack
   bridgehead-defend
@@ -32,6 +33,7 @@ globals [
   bridgehead-controlled-by
   israeli-reinforcements-spawned?
   egyptian-reinforcements-spawned?
+  reinforcement-tick
 ]
 
 breed [israeli-tanks israeli-tank]
@@ -71,7 +73,7 @@ to setup
   ;; 1) WORLD SIZE: 512 x 512
   ;; 2) PATCH SIZE: 2
   ;; --------------------------------------------
-  set battlefield-width 512
+  set battlefield-width 5
   set battlefield-height 512
   resize-world 0 (battlefield-width - 1) 0 (battlefield-height - 1)
   set-patch-size 2
@@ -101,6 +103,7 @@ to setup
   set desert-patches 0
   set road-patches 0
   set chinese-farm-patches 0
+  set bridgehead-patches 0
   set israeli-reinforcements-spawned? false
   set egyptian-reinforcements-spawned? false
   set reinforcement-tick 50  ; When reinforcements arrive
@@ -187,6 +190,7 @@ to setup
   show (word "Number of desert patches assigned: " desert-patches)
   show (word "Number of road patches assigned: " road-patches)
   show (word "Number of Chinese farm patches assigned: " chinese-farm-patches)
+  show (word "Number of bridgehad patches assigned: " bridgehead-patches)
 end
 
 
@@ -276,6 +280,7 @@ to setup-bridgehead-zone
      )
    ]
    ask bridgehead-zone [
+     set bridgehead-patches 1 + bridgehead-patches
      set pcolor magenta
      set bridgehead? true
      set strategic-value 15
@@ -577,7 +582,7 @@ to go
   reinforce-chinese-farm
   check-win-condition
   check-landmines
-
+  spawn-reinforcements
   ;;show (word "Israeli Units: " count turtles with [team = "israeli"])
   ;;show (word "Egyptian Units: " count turtles with [team = "egyptian"])
   tick
@@ -1853,7 +1858,7 @@ end
 GRAPHICS-WINDOW
 355
 10
-1387
+463
 1043
 -1
 -1
@@ -1868,7 +1873,7 @@ GRAPHICS-WINDOW
 1
 1
 0
-511
+49
 0
 511
 0
@@ -1878,10 +1883,10 @@ ticks
 30.0
 
 BUTTON
-25
-98
-88
-131
+26
+47
+89
+80
 NIL
 setup
 NIL
@@ -1895,10 +1900,10 @@ NIL
 1
 
 BUTTON
-25
-145
-88
-178
+100
+48
+163
+81
 NIL
 go
 T
@@ -1912,11 +1917,11 @@ NIL
 1
 
 PLOT
-24
-204
-224
-354
-Israeli vs Egyptian
+16
+101
+285
+251
+Israeli vs Egyptian Troops
 NIL
 NIL
 0.0
@@ -1929,6 +1934,66 @@ false
 PENS
 "Israel" 1.0 0 -15637942 true "" "plot count turtles with [team = \"israeli\"]"
 "Egyptian" 1.0 0 -13345367 true "" "plot count turtles with [team = \"egyptian\"]"
+
+PLOT
+23
+342
+283
+492
+Bridgehead Control
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -11085214 true "" "let bh-israeli count bridgehead-zone with [captured-by = \"israeli\"]\nlet bh-total count bridgehead-zone\nlet bh-israeli-pct (bh-israeli / max (list 1 bh-total)) * 100\nplot bh-israeli-pct"
+"pen-1" 1.0 0 -3844592 true "" "let bh-egyptian count bridgehead-zone with [captured-by = \"egyptian\"]\nlet bh-total count bridgehead-zone\nlet bh-egyptian-pct (bh-egyptian / max (list 1 bh-total)) * 100\nplot bh-egyptian-pct \n"
+
+MONITOR
+131
+273
+225
+318
+Israeli Units
+count turtles with [team = \"israeli\"]
+17
+1
+11
+
+MONITOR
+21
+272
+114
+317
+Egyptian Units 
+count turtles with [team = \"egyptian\"]
+17
+1
+11
+
+PLOT
+24
+514
+288
+664
+Chinese Farm Control
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"Israeli CF control" 1.0 0 -4699768 true "" "let cf-total count chinese-farm-patches\nlet cf-israeli count chinese-farm-patches with [captured-by = \"israeli\"]\nlet cf-israeli-pct (cf-israeli / max (list 1 cf-total)) * 100"
+"Egyptian CF Control" 1.0 0 -13345367 true "" "let cf-total count chinese-farm-patches\nlet cf-egyptian count chinese-farm-patches with [captured-by = \"egyptian\"]\nlet cf-egyptian-pct (cf-egyptian / max (list 1 cf-total)) * 100"
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -2276,6 +2341,62 @@ NetLogo 6.4.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="gridSearch" repetitions="30" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="200"/>
+    <metric>count israeli-tanks</metric>
+    <metric>count egyptian-tanks</metric>
+    <metric>count infantry with [team = "israeli"]</metric>
+    <metric>count infantry with [team = "egyptian"]</metric>
+    <metric>count bridgehead-zone with [captured-by = "israeli"]</metric>
+    <metric>count bridgehead-zone with [captured-by = "egyptian"]</metric>
+    <metric>count chinese-farm-patches with [captured-by = "israeli"]</metric>
+    <metric>count chinese-farm-patches with [captured-by = "egyptian"]</metric>
+    <enumeratedValueSet variable="e-epsilon">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-alpha">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-gamma">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="gridSearch (1)" repetitions="30" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="200"/>
+    <metric>count israeli-tanks</metric>
+    <metric>count egyptian-tanks</metric>
+    <metric>count infantry with [team = "israeli"]</metric>
+    <metric>count infantry with [team = "egyptian"]</metric>
+    <metric>count bridgehead-zone with [captured-by = "israeli"]</metric>
+    <metric>count bridgehead-zone with [captured-by = "egyptian"]</metric>
+    <metric>count chinese-farm-patches with [captured-by = "israeli"]</metric>
+    <metric>count chinese-farm-patches with [captured-by = "egyptian"]</metric>
+    <enumeratedValueSet variable="e-epsilon">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-alpha">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="e-gamma">
+      <value value="0.1"/>
+      <value value="0.5"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
